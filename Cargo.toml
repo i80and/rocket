@@ -1,0 +1,13 @@
+[package]
+name = "rocket"
+version = "0.1.0"
+authors = ["Andrew Aldridge <i80and@foxquill.com>"]
+
+[dependencies]
+comrak = "0.1.4"
+lazy_static = "0.2.8"
+regex = "0.2.2"
+time = "0.1"
+
+[profile.release]
+lto = true
