@@ -34,9 +34,8 @@ fn main() {
     let start_time = time::precise_time_ns();
     for argument in env::args().skip(1) {
         let node = parse(&argument);
-        // let output = evaluator.evaluate(&node);
-        node.print(0);
-        // println!("{:?}", output);
+        let output = evaluator.evaluate(&node);
+        println!("{}", output);
 
     }
 

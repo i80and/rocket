@@ -75,7 +75,7 @@ impl DirectiveHandler for Admonition {
         };
 
         let body = evaluator.render_markdown(&raw_body);
-        Ok(format!(r#"<div class="admonition admonition-{}"><span class="admonition-title admonition-title-{}">{}</span>{}</div>"#,
+        Ok(format!("<div class=\"admonition admonition-{}\"><span class=\"admonition-title admonition-title-{}\">{}</span>{}</div>\n",
                 self.class, self.class, title, body))
     }
 }
@@ -109,6 +109,7 @@ impl DirectiveHandler for Markdown {
         let body = args.iter()
             .map(|node| evaluator.evaluate(node))
             .fold(String::new(), |r, c| r + &c);
+
         let rendered = evaluator.render_markdown(&body).trim().to_owned();
         return Ok(rendered);
     }

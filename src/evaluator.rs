@@ -55,6 +55,7 @@ impl Evaluator {
         let mut options = comrak::ComrakOptions::default();
         options.github_pre_lang = true;
         options.ext_strikethrough = true;
+        options.ext_table = true;
 
         return comrak::markdown_to_html(&markdown, &options);
     }
