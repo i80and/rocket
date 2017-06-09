@@ -2,8 +2,14 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::mem;
 use std::str;
+use regex::Regex;
 
 use lex::{lex, Token};
+
+lazy_static! {
+    static ref PAT_IS_WHITESPACE: Regex = Regex::new(r#"^\s+$"#).expect("Failed to compile whitespace regex");
+}
+
 
 #[derive(Debug)]
 pub enum Node {
@@ -141,7 +147,10 @@ impl TokenHandler for StateExpression {
     fn handle_token(&mut self, token: &Token) -> StackRequest {
         match token {
             &Token::Text(s) => {
-                self.root.push(Node::new_string(s.to_owned()));
+                // When in an expression, whitespace only serves to separate tokens.
+                if !PAT_IS_WHITESPACE.is_match(s) {
+                    self.root.push(Node::new_string(s.to_owned()));
+                }
             }
             &Token::Character(c) => {
                 self.root.push(Node::new_string(c.to_string()));

@@ -156,7 +156,7 @@ impl DefinitionList {
 
 impl DirectiveHandler for DefinitionList {
     fn handle(&self, evaluator: &Evaluator, args: &[Node]) -> Result<String, ()> {
-        let mut segments = args.iter()
+        let segments: Result<Vec<_>, _> = args.iter()
             .map(|node| match node {
                      &Node::Owned(_) => {
                          return Err(());
@@ -169,11 +169,14 @@ impl DirectiveHandler for DefinitionList {
                          let term = evaluator.evaluate(&children[0]);
                          let definition =
                              evaluator.render_markdown(&evaluator.evaluate(&children[1]));
-                         format!("<dt>{}</dt><dd>{}</dd>", term, definition)
+                         Ok(format!("<dt>{}</dt><dd>{}</dd>", term, definition))
                      }
-                 });
+                 }).collect();
 
-        Ok(format!("<dl>{}</dl>", segments.concat()))
+        match segments {
+            Ok(s) => Ok(s.concat()),
+            Err(_) => Err(()),
+        }
     }
 }
 
