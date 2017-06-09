@@ -1,8 +1,7 @@
 use regex::Regex;
 
 lazy_static! {
-    static ref PAT_EMPTY_LINE: Regex = Regex::new(r#"^\s*\n$"#).expect("Failed to compile whitespace regex");
-    static ref PAT_TOKENS: Regex = Regex::new(r#"(?x)
+    static ref PAT_TOKENS: Regex = Regex::new(r#"(?xm)
           (?:\(:)
         | (?:=>)
         | "
@@ -20,7 +19,7 @@ lazy_static! {
         | [^\(\)=\s]+"#).expect("Failed to compile lexer regex");
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Token<'a> {
     StartBlock,
     RightParen,
@@ -29,7 +28,7 @@ pub enum Token<'a> {
     Dedent,
     Text(&'a str),
     Character(char),
-    String(&'a str)
+    String(&'a str),
 }
 
 pub fn lex<'a>(data: &'a str) -> Vec<Token<'a>> {
@@ -42,17 +41,23 @@ pub fn lex<'a>(data: &'a str) -> Vec<Token<'a>> {
         let bytes = token_text.as_bytes();
         let token = match bytes[0] {
             b')' => Token::RightParen,
-            b'"' => Token::String(&token_text[1..token_text.len()-1]),
+            b'"' => Token::String(&token_text[1..token_text.len() - 1]),
             b'\n' => {
-                if PAT_EMPTY_LINE.is_match(token_text) {
+                // If the line is empty, ignore it.
+                if data.as_bytes().get(pat_match.end()) == Some(&b'\n') {
                     tokens.push(Token::Character('\n'));
                     continue;
                 }
 
-                let new_indentation_level = token_text.len();
-                let current_indentation_level = *(indent.last().expect("Indentation stack is empty"));
-                if new_indentation_level < current_indentation_level {
+                // Subtract one for the leading newline
+                let new_indentation_level = token_text.len() - 1;
+
+                let mut current_indentation_level =
+                    *(indent.last().expect("Indentation stack is empty"));
+                while new_indentation_level < current_indentation_level {
                     indent.pop();
+                    current_indentation_level =
+                        *(indent.last().expect("Indentation stack is empty"));
                     tokens.push(Token::Dedent);
                 }
 
@@ -62,27 +67,29 @@ pub fn lex<'a>(data: &'a str) -> Vec<Token<'a>> {
                     start_rocket = false;
                     Token::Text(&token_text[new_indentation_level..])
                 } else {
-                    println!("{} {:?}", current_indentation_level, token_text);
-                    Token::Text(&token_text[current_indentation_level..])
+                    Token::Text(&token_text[new_indentation_level..])
                 }
-            },
-            b'(' => match bytes.get(1) {
-                Some(&b':') => Token::StartBlock,
-                None => Token::Character('('),
-                _ => panic!("Bad character matched: Expected ':' or nothing")
-            },
-            b'=' => match bytes.get(1) {
-                Some(&b'>') => {
-                    start_rocket = true;
-                    Token::Rocket
-                },
-                None => Token::Character('='),
-                _ => panic!("Bad character matched: Expected '>' or nothing")
-            },
-            _ => Token::Text(token_text)
+            }
+            b'(' => {
+                match bytes.get(1) {
+                    Some(&b':') => Token::StartBlock,
+                    None => Token::Character('('),
+                    _ => panic!("Bad character matched: Expected ':' or nothing"),
+                }
+            }
+            b'=' => {
+                match bytes.get(1) {
+                    Some(&b'>') => {
+                        start_rocket = true;
+                        Token::Rocket
+                    }
+                    None => Token::Character('='),
+                    _ => panic!("Bad character matched: Expected '>' or nothing"),
+                }
+            }
+            _ => Token::Text(token_text),
         };
 
-        println!("{:?}", token);
         tokens.push(token)
     }
 
@@ -92,4 +99,84 @@ pub fn lex<'a>(data: &'a str) -> Vec<Token<'a>> {
     }
 
     return tokens;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_empty() {
+        assert_eq!(lex(""), vec![]);
+    }
+
+    #[test]
+    fn test_expression() {
+        assert_eq!(lex(r#"(:foo bar (:a "b c") "baz" )"#),
+                   vec![Token::StartBlock,
+                        Token::Text("foo"),
+                        Token::Text(" "),
+                        Token::Text("bar"),
+                        Token::Text(" "),
+                        Token::StartBlock,
+                        Token::Text("a"),
+                        Token::Text(" "),
+                        Token::String("b c"),
+                        Token::RightParen,
+                        Token::Text(" "),
+                        Token::String("baz"),
+                        Token::Text(" "),
+                        Token::RightParen]);
+    }
+
+    #[test]
+    fn test_rocket() {
+        assert_eq!(lex(r#"
+(:note "a title" =>
+  stuff 1
+
+  stuff 2
+
+  (:note =>
+    more stuff
+
+  closing nested
+"#),
+                   vec![Token::Text("\n"),
+                        Token::StartBlock,
+                        Token::Text("note"),
+                        Token::Text(" "),
+                        Token::String("a title"),
+                        Token::Text(" "),
+                        Token::Rocket,
+                        Token::Indent,
+                        Token::Text(" "),
+                        Token::Text("stuff"),
+                        Token::Text(" "),
+                        Token::Text("1"),
+                        Token::Character('\n'),
+                        Token::Text(" "),
+                        Token::Text("stuff"),
+                        Token::Text(" "),
+                        Token::Text("2"),
+                        Token::Character('\n'),
+                        Token::Text(" "),
+                        Token::StartBlock,
+                        Token::Text("note"),
+                        Token::Text(" "),
+                        Token::Rocket,
+                        Token::Indent,
+                        Token::Text(" "),
+                        Token::Text("more"),
+                        Token::Text(" "),
+                        Token::Text("stuff"),
+                        Token::Character('\n'),
+                        Token::Dedent,
+                        Token::Text(" "),
+                        Token::Text("closing"),
+                        Token::Text(" "),
+                        Token::Text("nested"),
+                        Token::Dedent,
+                        Token::Text("\n")]);
+    }
 }

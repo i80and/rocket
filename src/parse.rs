@@ -6,43 +6,32 @@ use std::str;
 use lex::{lex, Token};
 
 #[derive(Debug)]
-pub enum Value {
-    None,
+pub enum Node {
     Owned(String),
-}
-
-#[derive(Debug)]
-pub struct Node {
-    value: Value,
-    children: Vec<Node>,
+    Children(Vec<Node>),
 }
 
 impl Node {
-    pub fn new() -> Node {
-        Node {
-            value: Value::None,
-            children: vec![]
-        }
+    pub fn new_children(value: Vec<Node>) -> Node {
+        Node::Children(value)
     }
 
     pub fn new_string<S: Into<String>>(value: S) -> Node {
-        Node {
-            value: Value::Owned(value.into()),
-            children: vec![]
-        }
+        Node::Owned(value.into())
     }
 
-    pub fn push(&mut self, node: Node) {
-        self.children.push(node);
-    }
-
+    #[allow(dead_code)]
     pub fn print(&self, indent: usize) {
-        println!("{:indent$}{}", "", match self.value {
-            Value::None => "None".to_owned(),
-            Value::Owned(ref s) => format!("{:?}", s),
-        }, indent=indent);
-        for child in &self.children {
-            child.print(indent + 2);
+        match self {
+            &Node::Owned(ref s) => {
+                println!("{:indent$}{:?}", "", s, indent = indent);
+            }
+            &Node::Children(ref children) => {
+                println!("{:indent$}\\", "", indent = indent);
+                for child in children {
+                    child.print(indent + 2);
+                }
+            }
         }
     }
 }
@@ -61,14 +50,14 @@ trait TokenHandler {
 }
 
 struct StateRocket {
-    root: Node,
+    root: Vec<Node>,
     buffer: Vec<String>,
 }
 
 impl StateRocket {
     fn new() -> StateRocket {
         StateRocket {
-            root: Node::new(),
+            root: vec![],
             buffer: vec![],
         }
     }
@@ -87,27 +76,27 @@ impl TokenHandler for StateRocket {
         match token {
             &Token::Text(s) => {
                 self.buffer.push(s.to_owned());
-            },
+            }
             &Token::Character(c) => {
                 self.ensure_string().push(c);
-            },
+            }
             &Token::String(s) => {
                 self.buffer.push(s.to_owned());
-            },
+            }
             &Token::StartBlock => {
                 if !self.buffer.is_empty() {
-                    self.root.children.push(Node::new_string(self.buffer.concat()));
+                    self.root.push(Node::new_string(self.buffer.concat()));
                     self.buffer.clear();
                 }
                 return StackRequest::Push(Box::new(StateExpression::new()));
-            },
+            }
             &Token::RightParen => {
                 self.ensure_string().push(')');
-            },
+            }
             &Token::Rocket => {
                 self.ensure_string().push_str("=>");
-            },
-            &Token::Indent => { panic!("Unexpected indentation token") },
+            }
+            &Token::Indent => panic!("Unexpected indentation token"),
             &Token::Dedent => {
                 // We need to pop both the rocket and the expression that started the rocket
                 return StackRequest::Pop(2);
@@ -120,25 +109,29 @@ impl TokenHandler for StateRocket {
     fn finish(&mut self) -> Node {
         if !self.buffer.is_empty() {
             let string = self.buffer.concat();
-            self.root.children.push(Node::new_string(string));
+            self.root.push(Node::new_string(string));
         }
 
-        mem::replace(&mut self.root, Node::new())
+        Node::new_children(mem::replace(&mut self.root, vec![]))
     }
 
-    fn push(&mut self, node: Node) { self.root.push(node); }
-    fn name(&self) -> &'static str { "rocket" }
+    fn push(&mut self, node: Node) {
+        self.root.push(node);
+    }
+    fn name(&self) -> &'static str {
+        "rocket"
+    }
 }
 
 struct StateExpression {
-    root: Node,
+    root: Vec<Node>,
     saw_rocket: bool,
 }
 
 impl StateExpression {
     fn new() -> StateExpression {
         StateExpression {
-            root: Node::new(),
+            root: vec![],
             saw_rocket: false,
         }
     }
@@ -148,33 +141,33 @@ impl TokenHandler for StateExpression {
     fn handle_token(&mut self, token: &Token) -> StackRequest {
         match token {
             &Token::Text(s) => {
-                self.root.children.push(Node::new_string(s.to_owned()));
-            },
+                self.root.push(Node::new_string(s.to_owned()));
+            }
             &Token::Character(c) => {
-                self.root.children.push(Node::new_string(c.to_string()));
-            },
+                self.root.push(Node::new_string(c.to_string()));
+            }
             &Token::String(s) => {
-                self.root.children.push(Node::new_string(s.to_owned()));
-            },
+                self.root.push(Node::new_string(s.to_owned()));
+            }
             &Token::StartBlock => {
                 return StackRequest::Push(Box::new(StateExpression::new()));
-            },
+            }
             &Token::RightParen => {
                 return StackRequest::Pop(1);
-            },
+            }
             &Token::Rocket => {
                 self.saw_rocket = true;
                 return StackRequest::None;
-            },
+            }
             &Token::Indent => {
                 if self.saw_rocket {
                     self.saw_rocket = false;
                     return StackRequest::Push(Box::new(StateRocket::new()));
                 }
-            },
+            }
             &Token::Dedent => {
                 return StackRequest::Pop(1);
-            },
+            }
         }
 
         if self.saw_rocket {
@@ -185,34 +178,46 @@ impl TokenHandler for StateExpression {
     }
 
     fn finish(&mut self) -> Node {
-        mem::replace(&mut self.root, Node::new())
+        Node::new_children(mem::replace(&mut self.root, vec![]))
     }
 
-    fn push(&mut self, node: Node) { self.root.push(node); }
-    fn name(&self) -> &'static str { "expression" }
+    fn push(&mut self, node: Node) {
+        self.root.push(node);
+    }
+    fn name(&self) -> &'static str {
+        "expression"
+    }
 }
 
 struct ParseContextStack {
-    stack: Vec<Box<TokenHandler>>
+    stack: Vec<Box<TokenHandler>>,
 }
 
 impl ParseContextStack {
     fn new() -> ParseContextStack {
         ParseContextStack {
-            stack: vec![Box::new(StateRocket::new())]
+            stack: vec![Box::new(StateRocket {
+                                     root: vec![Node::new_string("md")],
+                                     buffer: vec![],
+                                 })],
         }
     }
 
     fn handle(&mut self, token: &Token) {
-        match self.stack.last_mut().expect("Empty parse stack").handle_token(token) {
-            StackRequest::Push(handler) => { self.stack.push(handler); },
+        match self.stack
+                  .last_mut()
+                  .expect("Empty parse stack")
+                  .handle_token(token) {
+            StackRequest::Push(handler) => {
+                self.stack.push(handler);
+            }
             StackRequest::Pop(n) => {
                 for _ in 0..n {
                     let mut handler = self.stack.pop().expect("Cannot pop last handler");
                     (**self.stack.last_mut().expect("Empty parse stack")).push(handler.finish());
                 }
-            },
-            StackRequest::None => ()
+            }
+            StackRequest::None => (),
         }
     }
 }
@@ -220,7 +225,8 @@ impl ParseContextStack {
 pub fn parse(path: &str) -> Node {
     let mut file = File::open(&path).expect("Failed to open input file");
     let mut data = String::new();
-    file.read_to_string(&mut data).expect("Failed to read input file");
+    file.read_to_string(&mut data)
+        .expect("Failed to read input file");
 
     let mut stack = ParseContextStack::new();
     for token in lex(&data) {
