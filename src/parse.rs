@@ -63,7 +63,7 @@ struct StateRocket {
 impl StateRocket {
     fn new() -> StateRocket {
         StateRocket {
-            root: vec![],
+            root: vec![Node::new_string("concat")],
             buffer: vec![],
         }
     }
