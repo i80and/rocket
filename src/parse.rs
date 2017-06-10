@@ -10,29 +10,42 @@ lazy_static! {
     static ref PAT_IS_WHITESPACE: Regex = Regex::new(r#"^\s+$"#).expect("Failed to compile whitespace regex");
 }
 
+type FileID = u32;
 
 #[derive(Debug)]
-pub enum Node {
+pub enum NodeValue {
     Owned(String),
     Children(Vec<Node>),
 }
 
+#[derive(Debug)]
+pub struct Node {
+    pub value: NodeValue,
+    pub file_id: FileID
+}
+
 impl Node {
     pub fn new_children(value: Vec<Node>) -> Node {
-        Node::Children(value)
+        Node {
+            value: NodeValue::Children(value),
+            file_id: 0
+        }
     }
 
     pub fn new_string<S: Into<String>>(value: S) -> Node {
-        Node::Owned(value.into())
+        Node {
+            value: NodeValue::Owned(value.into()),
+            file_id: 0
+        }
     }
 
     #[allow(dead_code)]
     pub fn print(&self, indent: usize) {
-        match self {
-            &Node::Owned(ref s) => {
+        match self.value {
+            NodeValue::Owned(ref s) => {
                 println!("{:indent$}{:?}", "", s, indent = indent);
             }
-            &Node::Children(ref children) => {
+            NodeValue::Children(ref children) => {
                 println!("{:indent$}\\", "", indent = indent);
                 for child in children {
                     child.print(indent + 2);

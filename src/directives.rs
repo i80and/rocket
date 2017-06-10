@@ -1,4 +1,4 @@
-use parse::{parse, Node};
+use parse::{parse, Node, NodeValue};
 use evaluator::Evaluator;
 
 pub trait DirectiveHandler {
@@ -161,11 +161,11 @@ impl DefinitionList {
 impl DirectiveHandler for DefinitionList {
     fn handle(&self, evaluator: &Evaluator, args: &[Node]) -> Result<String, ()> {
         let segments: Result<Vec<_>, _> = args.iter()
-            .map(|node| match node {
-                     &Node::Owned(_) => {
+            .map(|node| match node.value {
+                     NodeValue::Owned(_) => {
                          return Err(());
                      }
-                     &Node::Children(ref children) => {
+                     NodeValue::Children(ref children) => {
                          if children.len() != 2 {
                              return Err(());
                          }

@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use comrak;
-use parse::Node;
+use parse::{Node, NodeValue};
 use directives;
 
 pub struct Evaluator {
@@ -20,15 +20,15 @@ impl Evaluator {
     }
 
     pub fn evaluate(&self, node: &Node) -> String {
-        match node {
-            &Node::Owned(ref s) => {
+        match node.value {
+            NodeValue::Owned(ref s) => {
                 return s.to_owned();
             }
-            &Node::Children(ref children) => {
+            NodeValue::Children(ref children) => {
                 if let Some(first_element) = children.get(0) {
-                    let directive_name = match first_element {
-                        &Node::Owned(ref dname) => Cow::Borrowed(dname),
-                        &Node::Children(_) => Cow::Owned(self.evaluate(first_element)),
+                    let directive_name = match first_element.value {
+                        NodeValue::Owned(ref dname) => Cow::Borrowed(dname),
+                        NodeValue::Children(_) => Cow::Owned(self.evaluate(first_element)),
                     };
 
                     if let Some(handler) = self.directives.get(directive_name.as_ref()) {
