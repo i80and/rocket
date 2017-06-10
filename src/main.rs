@@ -26,13 +26,14 @@ fn main() {
         ap.set_description("The Rocket documentation build system.");
         ap.refer(&mut option_verbose)
             .add_option(&["-v", "--verbose"], StoreTrue, "Be verbose");
-        ap.refer(&mut option_inputs).add_argument("inputs", argparse::List, "Files to compile");
+        ap.refer(&mut option_inputs)
+            .add_argument("inputs", argparse::List, "Files to compile");
         ap.parse_args_or_exit();
     }
 
     let loglevel = match option_verbose {
         true => log::LogLevel::Debug,
-        false => log::LogLevel::Info
+        false => log::LogLevel::Info,
     };
     simple_logger::init_with_level(loglevel).expect("Failed to initialize logger");
 
@@ -57,7 +58,9 @@ fn main() {
     for argument in option_inputs {
         let node = match parse(&argument) {
             Ok(n) => n,
-            Err(_) => { continue; }
+            Err(_) => {
+                continue;
+            }
         };
         let output = evaluator.evaluate(&node);
         println!("{}", output);

@@ -159,12 +159,12 @@ impl TokenHandler for StateExpression {
 
                     self.in_quote = false;
                     self.quote.clear();
-                },
+                }
                 &Token::StartBlock => self.quote.push("(:".to_owned()),
                 &Token::RightParen => self.quote.push(")".to_owned()),
                 &Token::Rocket => self.quote.push("=>".to_owned()),
                 &Token::Indent => (),
-                &Token::Dedent => ()
+                &Token::Dedent => (),
             }
             return StackRequest::None;
         }

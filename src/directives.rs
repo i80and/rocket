@@ -76,7 +76,10 @@ impl DirectiveHandler for Admonition {
 
         let body = evaluator.render_markdown(&raw_body);
         Ok(format!("<div class=\"admonition admonition-{}\"><span class=\"admonition-title admonition-title-{}\">{}</span>{}</div>\n",
-                self.class, self.class, title, body))
+                   self.class,
+                   self.class,
+                   title,
+                   body))
     }
 }
 
@@ -172,7 +175,8 @@ impl DirectiveHandler for DefinitionList {
                              evaluator.render_markdown(&evaluator.evaluate(&children[1]));
                          Ok(format!("<dt>{}</dt><dd>{}</dd>", term, definition))
                      }
-                 }).collect();
+                 })
+            .collect();
 
         match segments {
             Ok(s) => Ok(s.concat()),
