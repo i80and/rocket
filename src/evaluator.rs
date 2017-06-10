@@ -6,14 +6,14 @@ use directives;
 
 pub struct Evaluator {
     directives: HashMap<String, Box<directives::DirectiveHandler>>,
-    pub parser: Parser
+    pub parser: Parser,
 }
 
 impl Evaluator {
     pub fn new() -> Evaluator {
         Evaluator {
             directives: HashMap::new(),
-            parser: Parser::new()
+            parser: Parser::new(),
         }
     }
 
@@ -25,9 +25,7 @@ impl Evaluator {
 
     pub fn evaluate(&self, node: &Node) -> String {
         match node.value {
-            NodeValue::Owned(ref s) => {
-                return s.to_owned();
-            }
+            NodeValue::Owned(ref s) => s.to_owned(),
             NodeValue::Children(ref children) => {
                 if let Some(first_element) = children.get(0) {
                     let directive_name = match first_element.value {
@@ -46,10 +44,10 @@ impl Evaluator {
                     }
 
                     println!("Unknown directive {:?}", directive_name);
-                    return "".to_owned();
+                    "".to_owned()
                 } else {
                     println!("Empty node");
-                    return "".to_owned();
+                    "".to_owned()
                 }
             }
         }
@@ -61,6 +59,6 @@ impl Evaluator {
         options.ext_strikethrough = true;
         options.ext_table = true;
 
-        return comrak::markdown_to_html(&markdown, &options);
+        comrak::markdown_to_html(markdown, &options)
     }
 }

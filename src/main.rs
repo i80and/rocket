@@ -30,10 +30,12 @@ fn main() {
         ap.parse_args_or_exit();
     }
 
-    let loglevel = match option_verbose {
-        true => log::LogLevel::Debug,
-        false => log::LogLevel::Info,
+    let loglevel = if option_verbose {
+        log::LogLevel::Debug
+    } else {
+        log::LogLevel::Info
     };
+
     simple_logger::init_with_level(loglevel).expect("Failed to initialize logger");
 
     let mut evaluator = Evaluator::new();

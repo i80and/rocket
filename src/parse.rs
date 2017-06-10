@@ -21,21 +21,21 @@ pub enum NodeValue {
 #[derive(Debug)]
 pub struct Node {
     pub value: NodeValue,
-    pub file_id: FileID
+    pub file_id: FileID,
 }
 
 impl Node {
     pub fn new_children(value: Vec<Node>) -> Node {
         Node {
             value: NodeValue::Children(value),
-            file_id: 0
+            file_id: 0,
         }
     }
 
     pub fn new_string<S: Into<String>>(value: S) -> Node {
         Node {
             value: NodeValue::Owned(value.into()),
-            file_id: 0
+            file_id: 0,
         }
     }
 
@@ -81,7 +81,7 @@ impl StateRocket {
         }
     }
 
-    fn ensure_string<'a>(&'a mut self) -> &'a mut String {
+    fn ensure_string(&mut self) -> &mut String {
         if self.buffer.is_empty() {
             self.buffer.push(String::with_capacity(2));
         }
@@ -92,37 +92,37 @@ impl StateRocket {
 
 impl TokenHandler for StateRocket {
     fn handle_token(&mut self, token: &Token) -> StackRequest {
-        match token {
-            &Token::Text(s) => {
+        match *token {
+            Token::Text(s) => {
                 self.buffer.push(s.to_owned());
             }
-            &Token::Character(c) => {
+            Token::Character(c) => {
                 self.ensure_string().push(c);
             }
-            &Token::Quote => {
+            Token::Quote => {
                 self.ensure_string().push('"');
             }
-            &Token::StartBlock => {
+            Token::StartBlock => {
                 if !self.buffer.is_empty() {
                     self.root.push(Node::new_string(self.buffer.concat()));
                     self.buffer.clear();
                 }
                 return StackRequest::Push(Box::new(StateExpression::new()));
             }
-            &Token::RightParen => {
+            Token::RightParen => {
                 self.ensure_string().push(')');
             }
-            &Token::Rocket => {
+            Token::Rocket => {
                 self.ensure_string().push_str("=>");
             }
-            &Token::Indent => panic!("Unexpected indentation token"),
-            &Token::Dedent => {
+            Token::Indent => panic!("Unexpected indentation token"),
+            Token::Dedent => {
                 // We need to pop both the rocket and the expression that started the rocket
                 return StackRequest::Pop(2);
             }
         }
 
-        return StackRequest::None;
+        StackRequest::None
     }
 
     fn finish(&mut self) -> Node {
@@ -164,55 +164,51 @@ impl StateExpression {
 impl TokenHandler for StateExpression {
     fn handle_token(&mut self, token: &Token) -> StackRequest {
         if self.in_quote {
-            match token {
-                &Token::Text(s) => self.quote.push(s.to_owned()),
-                &Token::Character(c) => self.quote.push(c.to_string()),
-                &Token::Quote => {
+            match *token {
+                Token::Text(s) => self.quote.push(s.to_owned()),
+                Token::Character(c) => self.quote.push(c.to_string()),
+                Token::Quote => {
                     self.root.push(Node::new_string(self.quote.concat()));
 
                     self.in_quote = false;
                     self.quote.clear();
                 }
-                &Token::StartBlock => self.quote.push("(:".to_owned()),
-                &Token::RightParen => self.quote.push(")".to_owned()),
-                &Token::Rocket => self.quote.push("=>".to_owned()),
-                &Token::Indent => (),
-                &Token::Dedent => (),
+                Token::StartBlock => self.quote.push("(:".to_owned()),
+                Token::RightParen => self.quote.push(")".to_owned()),
+                Token::Rocket => self.quote.push("=>".to_owned()),
+                Token::Indent | Token::Dedent => (),
             }
             return StackRequest::None;
         }
 
-        match token {
-            &Token::Text(s) => {
+        match *token {
+            Token::Text(s) => {
                 // When in an expression, whitespace only serves to separate tokens.
                 if !PAT_IS_WHITESPACE.is_match(s) {
                     self.root.push(Node::new_string(s.to_owned()));
                 }
             }
-            &Token::Character(c) => {
+            Token::Character(c) => {
                 self.root.push(Node::new_string(c.to_string()));
             }
-            &Token::Quote => {
+            Token::Quote => {
                 self.in_quote = true;
             }
-            &Token::StartBlock => {
+            Token::StartBlock => {
                 return StackRequest::Push(Box::new(StateExpression::new()));
             }
-            &Token::RightParen => {
-                return StackRequest::Pop(1);
-            }
-            &Token::Rocket => {
+            Token::Rocket => {
                 self.saw_rocket = true;
                 return StackRequest::None;
             }
-            &Token::Indent => {
+            Token::RightParen | Token::Dedent => {
+                return StackRequest::Pop(1);
+            }
+            Token::Indent => {
                 if self.saw_rocket {
                     self.saw_rocket = false;
                     return StackRequest::Push(Box::new(StateRocket::new()));
                 }
-            }
-            &Token::Dedent => {
-                return StackRequest::Pop(1);
             }
         }
 
@@ -220,7 +216,7 @@ impl TokenHandler for StateExpression {
             panic!("Expected indentation after =>");
         }
 
-        return StackRequest::None;
+        StackRequest::None
     }
 
     fn finish(&mut self) -> Node {
@@ -293,6 +289,6 @@ impl Parser {
             stack.handle(&token);
         }
 
-        return Ok(stack.stack.pop().expect("Empty state stack").finish());
+        Ok(stack.stack.pop().expect("Empty state stack").finish())
     }
 }

@@ -36,7 +36,7 @@ impl DirectiveHandler for Version {
             0 => Ok(self.version.join(".")),
             1 => {
                 let arg = evaluator.evaluate(&args[0]);
-                if arg.len() == 0 {
+                if arg.is_empty() {
                     return Ok("".to_owned());
                 }
 
@@ -114,7 +114,7 @@ impl DirectiveHandler for Markdown {
             .fold(String::new(), |r, c| r + &c);
 
         let rendered = evaluator.render_markdown(&body).trim().to_owned();
-        return Ok(rendered);
+        Ok(rendered)
     }
 }
 
@@ -146,7 +146,7 @@ impl DirectiveHandler for LinkTemplate {
             None => url.clone(),
         };
 
-        return Ok(format!(r#"<a href="{}">{}</a>"#, url, title));
+        Ok(format!(r#"<a href="{}">{}</a>"#, url, title))
     }
 }
 
@@ -162,9 +162,7 @@ impl DirectiveHandler for DefinitionList {
     fn handle(&self, evaluator: &Evaluator, args: &[Node]) -> Result<String, ()> {
         let segments: Result<Vec<_>, _> = args.iter()
             .map(|node| match node.value {
-                     NodeValue::Owned(_) => {
-                         return Err(());
-                     }
+                     NodeValue::Owned(_) => Err(()),
                      NodeValue::Children(ref children) => {
                          if children.len() != 2 {
                              return Err(());
