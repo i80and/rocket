@@ -14,7 +14,6 @@ mod lex;
 mod parse;
 
 use argparse::{ArgumentParser, StoreTrue};
-use parse::parse;
 use evaluator::Evaluator;
 
 fn main() {
@@ -56,7 +55,7 @@ fn main() {
 
     let start_time = time::precise_time_ns();
     for argument in option_inputs {
-        let node = match parse(&argument) {
+        let node = match evaluator.parser.parse(&argument) {
             Ok(n) => n,
             Err(_) => {
                 continue;

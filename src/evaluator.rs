@@ -1,16 +1,20 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use comrak;
-use parse::{Node, NodeValue};
+use parse::{Parser, Node, NodeValue};
 use directives;
 
 pub struct Evaluator {
     directives: HashMap<String, Box<directives::DirectiveHandler>>,
+    pub parser: Parser
 }
 
 impl Evaluator {
     pub fn new() -> Evaluator {
-        Evaluator { directives: HashMap::new() }
+        Evaluator {
+            directives: HashMap::new(),
+            parser: Parser::new()
+        }
     }
 
     pub fn register<S: Into<String>>(&mut self,

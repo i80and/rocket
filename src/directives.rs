@@ -1,4 +1,4 @@
-use parse::{parse, Node, NodeValue};
+use parse::{Node, NodeValue};
 use evaluator::Evaluator;
 
 pub trait DirectiveHandler {
@@ -200,7 +200,7 @@ impl DirectiveHandler for Include {
         }
 
         let path = evaluator.evaluate(&args[0]);
-        let node = match parse(&path) {
+        let node = match evaluator.parser.parse(&path) {
             Ok(n) => n,
             Err(_) => return Err(()),
         };

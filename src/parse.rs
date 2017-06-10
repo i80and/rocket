@@ -268,23 +268,31 @@ impl ParseContextStack {
     }
 }
 
-pub fn parse(path: &str) -> Result<Node, ()> {
-    debug!("Parsing {}", path);
-    let mut file = match File::open(&path) {
-        Ok(f) => f,
-        Err(_) => {
-            error!("Failed to open {}", path);
-            return Err(());
-        }
-    };
-    let mut data = String::new();
-    file.read_to_string(&mut data)
-        .expect("Failed to read input file");
+pub struct Parser;
 
-    let mut stack = ParseContextStack::new();
-    for token in lex(&data) {
-        stack.handle(&token);
+impl Parser {
+    pub fn new() -> Parser {
+        Parser
     }
 
-    return Ok(stack.stack.pop().expect("Empty state stack").finish());
+    pub fn parse(&self, path: &str) -> Result<Node, ()> {
+        debug!("Parsing {}", path);
+        let mut file = match File::open(&path) {
+            Ok(f) => f,
+            Err(_) => {
+                error!("Failed to open {}", path);
+                return Err(());
+            }
+        };
+        let mut data = String::new();
+        file.read_to_string(&mut data)
+            .expect("Failed to read input file");
+
+        let mut stack = ParseContextStack::new();
+        for token in lex(&data) {
+            stack.handle(&token);
+        }
+
+        return Ok(stack.stack.pop().expect("Empty state stack").finish());
+    }
 }
