@@ -1,4 +1,4 @@
-use parse::Node;
+use parse::{parse, Node};
 use evaluator::Evaluator;
 
 pub trait DirectiveHandler {
@@ -178,6 +178,30 @@ impl DirectiveHandler for DefinitionList {
             Ok(s) => Ok(s.concat()),
             Err(_) => Err(()),
         }
+    }
+}
+
+pub struct Include;
+
+impl Include {
+    pub fn new() -> Include {
+        Include
+    }
+}
+
+impl DirectiveHandler for Include {
+    fn handle(&self, evaluator: &Evaluator, args: &[Node]) -> Result<String, ()> {
+        if args.len() != 1 {
+            return Err(());
+        }
+
+        let path = evaluator.evaluate(&args[0]);
+        let node = match parse(&path) {
+            Ok(n) => n,
+            Err(_) => return Err(()),
+        };
+
+        Ok(evaluator.evaluate(&node))
     }
 }
 

@@ -51,15 +51,13 @@ fn main() {
                        Box::new(directives::DefinitionList::new()));
 
     evaluator.register("concat", Box::new(directives::Concat::new()));
+    evaluator.register("include", Box::new(directives::Include::new()));
 
     let start_time = time::precise_time_ns();
     for argument in option_inputs {
         let node = match parse(&argument) {
             Ok(n) => n,
-            Err(_) => {
-                error!("Failed to open {}", &argument);
-                continue;
-            }
+            Err(_) => { continue; }
         };
         let output = evaluator.evaluate(&node);
         println!("{}", output);

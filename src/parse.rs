@@ -257,7 +257,13 @@ impl ParseContextStack {
 
 pub fn parse(path: &str) -> Result<Node, ()> {
     debug!("Parsing {}", path);
-    let mut file = File::open(&path).or(Err(()))?;
+    let mut file = match File::open(&path) {
+        Ok(f) => f,
+        Err(_) => {
+            error!("Failed to open {}", path);
+            return Err(());
+        }
+    };
     let mut data = String::new();
     file.read_to_string(&mut data)
         .expect("Failed to read input file");
