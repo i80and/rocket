@@ -255,8 +255,9 @@ impl ParseContextStack {
     }
 }
 
-pub fn parse(path: &str) -> Node {
-    let mut file = File::open(&path).expect("Failed to open input file");
+pub fn parse(path: &str) -> Result<Node, ()> {
+    debug!("Parsing {}", path);
+    let mut file = File::open(&path).or(Err(()))?;
     let mut data = String::new();
     file.read_to_string(&mut data)
         .expect("Failed to read input file");
@@ -266,5 +267,5 @@ pub fn parse(path: &str) -> Node {
         stack.handle(&token);
     }
 
-    return stack.stack.pop().expect("Empty state stack").finish();
+    return Ok(stack.stack.pop().expect("Empty state stack").finish());
 }
