@@ -86,8 +86,8 @@ impl TokenHandler for StateRocket {
             &Token::Character(c) => {
                 self.ensure_string().push(c);
             }
-            &Token::String(s) => {
-                self.buffer.push(s.to_owned());
+            &Token::Quote => {
+                self.ensure_string().push('"');
             }
             &Token::StartBlock => {
                 if !self.buffer.is_empty() {
@@ -132,6 +132,9 @@ impl TokenHandler for StateRocket {
 struct StateExpression {
     root: Vec<Node>,
     saw_rocket: bool,
+
+    quote: Vec<String>,
+    in_quote: bool,
 }
 
 impl StateExpression {
@@ -139,12 +142,33 @@ impl StateExpression {
         StateExpression {
             root: vec![],
             saw_rocket: false,
+            quote: vec![],
+            in_quote: false,
         }
     }
 }
 
 impl TokenHandler for StateExpression {
     fn handle_token(&mut self, token: &Token) -> StackRequest {
+        if self.in_quote {
+            match token {
+                &Token::Text(s) => self.quote.push(s.to_owned()),
+                &Token::Character(c) => self.quote.push(c.to_string()),
+                &Token::Quote => {
+                    self.root.push(Node::new_string(self.quote.concat()));
+
+                    self.in_quote = false;
+                    self.quote.clear();
+                },
+                &Token::StartBlock => self.quote.push("(:".to_owned()),
+                &Token::RightParen => self.quote.push(")".to_owned()),
+                &Token::Rocket => self.quote.push("=>".to_owned()),
+                &Token::Indent => (),
+                &Token::Dedent => ()
+            }
+            return StackRequest::None;
+        }
+
         match token {
             &Token::Text(s) => {
                 // When in an expression, whitespace only serves to separate tokens.
@@ -155,8 +179,8 @@ impl TokenHandler for StateExpression {
             &Token::Character(c) => {
                 self.root.push(Node::new_string(c.to_string()));
             }
-            &Token::String(s) => {
-                self.root.push(Node::new_string(s.to_owned()));
+            &Token::Quote => {
+                self.in_quote = true;
             }
             &Token::StartBlock => {
                 return StackRequest::Push(Box::new(StateExpression::new()));

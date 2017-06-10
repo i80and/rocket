@@ -5,18 +5,12 @@ lazy_static! {
           (?:\(:)
         | (?:=>)
         | "
-            (?:
-                  [^"\\]
-                | \\(.|\n)
-                | \\u[0-9a-fA-F]{4}
-            )*
-          "
         | (?:\n\x20*)
         | =
         | \(
         | \)
         | \s+
-        | [^\(\)=\s]+"#).expect("Failed to compile lexer regex");
+        | [^\(\)=\s"]+"#).expect("Failed to compile lexer regex");
 }
 
 #[derive(Debug, PartialEq)]
@@ -28,7 +22,7 @@ pub enum Token<'a> {
     Dedent,
     Text(&'a str),
     Character(char),
-    String(&'a str),
+    Quote,
 }
 
 pub fn lex<'a>(data: &'a str) -> Vec<Token<'a>> {
@@ -41,7 +35,7 @@ pub fn lex<'a>(data: &'a str) -> Vec<Token<'a>> {
         let bytes = token_text.as_bytes();
         let token = match bytes[0] {
             b')' => Token::RightParen,
-            b'"' => Token::String(&token_text[1..token_text.len() - 1]),
+            b'"' => Token::Quote,
             b'\n' => {
                 // If the line is empty, ignore it.
                 if data.as_bytes().get(pat_match.end()) == Some(&b'\n') {
@@ -121,10 +115,16 @@ mod tests {
                         Token::StartBlock,
                         Token::Text("a"),
                         Token::Text(" "),
-                        Token::String("b c"),
+                        Token::Quote,
+                        Token::Text("b"),
+                        Token::Text(" "),
+                        Token::Text("c"),
+                        Token::Quote,
                         Token::RightParen,
                         Token::Text(" "),
-                        Token::String("baz"),
+                        Token::Quote,
+                        Token::Text("baz"),
+                        Token::Quote,
                         Token::Text(" "),
                         Token::RightParen]);
     }
@@ -146,7 +146,11 @@ mod tests {
                         Token::StartBlock,
                         Token::Text("note"),
                         Token::Text(" "),
-                        Token::String("a title"),
+                        Token::Quote,
+                        Token::Text("a"),
+                        Token::Text(" "),
+                        Token::Text("title"),
+                        Token::Quote,
                         Token::Text(" "),
                         Token::Rocket,
                         Token::Indent,
