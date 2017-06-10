@@ -23,7 +23,6 @@ fn main() {
     evaluator.register("warning",
                        Box::new(directives::Admonition::new("Warning", "warning")));
     evaluator.register("insert", Box::new(directives::Dummy::new()));
-    evaluator.register("definition-list", Box::new(directives::Dummy::new()));
     evaluator.register("manual",
                        Box::new(directives::LinkTemplate::new("https://docs.mongodb.com/manual")));
     evaluator.register("definition-list",
