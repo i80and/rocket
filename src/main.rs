@@ -7,10 +7,12 @@ extern crate log;
 extern crate simple_logger;
 extern crate regex;
 extern crate time;
+extern crate typed_arena;
 
 mod directives;
 mod evaluator;
 mod lex;
+mod markdown;
 mod parse;
 
 use std::path::Path;
