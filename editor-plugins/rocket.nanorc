@@ -1,0 +1,19 @@
+syntax "Rocket" "\.rocket$"
+
+# String
+color yellow "\"(\\.|[^"])*\""
+
+# S-expression start
+color brightblue "\(:[a-z-]+|\(:\"[^\"]+\""
+
+# code
+color yellow   "`[^`]*`"
+# code blocks
+color yellow start="^```[^$]" end="^```$"
+color yellow "^```$"
+
+# End S-expression
+color brightblue "\)"
+
+## Trailing spaces
+color ,green "[[:space:]]+$"
