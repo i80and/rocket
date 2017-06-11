@@ -46,7 +46,6 @@ fn main() {
                        Box::new(directives::Admonition::new("Note", "note")));
     evaluator.register("warning",
                        Box::new(directives::Admonition::new("Warning", "warning")));
-    evaluator.register("insert", Box::new(directives::Dummy::new()));
     evaluator.register("manual",
                        Box::new(directives::LinkTemplate::new("https://docs.mongodb.com/manual")));
     evaluator.register("definition-list",
@@ -54,6 +53,7 @@ fn main() {
 
     evaluator.register("concat", Box::new(directives::Concat::new()));
     evaluator.register("include", Box::new(directives::Include::new()));
+    evaluator.register("null", Box::new(directives::Dummy::new()));
 
     let start_time = time::precise_time_ns();
     for argument in option_inputs {
