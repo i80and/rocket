@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use parse::{Node, NodeValue};
 use evaluator::Evaluator;
@@ -218,6 +219,70 @@ impl DirectiveHandler for Include {
     }
 }
 
+pub struct Let;
+
+impl Let {
+    pub fn new() -> Let {
+        Let
+    }
+}
+
+impl DirectiveHandler for Let {
+    fn handle(&self, evaluator: &Evaluator, args: &[Node]) -> Result<String, ()> {
+        if args.len() < 1 {
+            return Err(());
+        }
+
+        let mut replacements = HashMap::new();
+        let kvs = &args[0];
+        match kvs.value {
+            NodeValue::Owned(_) => { return Err(()); },
+            NodeValue::Children(ref children) => {
+                if children.len() % 2 != 0 {
+                    return Err(());
+                }
+
+                for pair in children.chunks(2) {
+                    let evaluated_key = evaluator.evaluate(&pair[0]);
+                    let evaluated_value = evaluator.evaluate(&pair[1]);
+
+                    replacements.insert(evaluated_key, evaluated_value);
+                }
+            }
+        }
+
+        let mut result = String::with_capacity(128);
+
+        for node in &args[1..] {
+            let new_node = node.map(&|candidate| {
+                match candidate.value {
+                    NodeValue::Owned(_) => None,
+                    NodeValue::Children(ref children) => {
+                        if children.is_empty() {
+                            return None;
+                        }
+
+                        if let NodeValue::Owned(ref key) = children[0].value {
+                            if let Some(new_value) = replacements.get(key) {
+                                return Some(Node {
+                                    value: NodeValue::Owned(new_value.to_owned()),
+                                    file_id: candidate.file_id,
+                                });
+                            }
+                        }
+
+                        None
+                    }
+                }
+            });
+
+            result += &evaluator.evaluate(&new_node);
+        }
+
+        Ok(result)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -308,5 +373,23 @@ mod tests {
                    Ok(r#"<a href="https://foxquill.com/simd-rectangle-intersection/">https://foxquill.com/simd-rectangle-intersection/</a>"#.to_owned()));
         assert_eq!(handler.handle(&evaluator, &[Node::new_string("SIMD.js Rectangle Intersection"), Node::new_string("/simd-rectangle-intersection/")]),
                    Ok(r#"<a href="https://foxquill.com/simd-rectangle-intersection/">SIMD.js Rectangle Intersection</a>"#.to_owned()));
+    }
+
+    #[test]
+    fn test_let() {
+        let mut evaluator = Evaluator::new();
+        let handler = Let::new();
+
+        evaluator.register("concat", Box::new(Concat::new()));
+
+        assert!(handler.handle(&evaluator, &[]).is_err());
+        let result = handler.handle(&evaluator, &[
+            Node::new_children(vec![
+                Node::new_string("foo"), Node::new_children(vec![Node::new_string("concat"), Node::new_string("1"), Node::new_string("2")]),
+                Node::new_string("bar"), Node::new_string("3")]),
+                Node::new_children(vec![Node::new_string("foo")]),
+            Node::new_children(vec![Node::new_string("bar")])]);
+
+        assert_eq!(result, Ok("123".to_owned()));
     }
 }

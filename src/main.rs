@@ -58,6 +58,7 @@ fn main() {
     evaluator.register("concat", Box::new(directives::Concat::new()));
     evaluator.register("include", Box::new(directives::Include::new()));
     evaluator.register("null", Box::new(directives::Dummy::new()));
+    evaluator.register("let", Box::new(directives::Let::new()));
 
     let start_time = time::precise_time_ns();
     for argument in option_inputs {

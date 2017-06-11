@@ -13,13 +13,13 @@ lazy_static! {
 
 type FileID = u32;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NodeValue {
     Owned(String),
     Children(Vec<Node>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Node {
     pub value: NodeValue,
     pub file_id: FileID,
@@ -37,6 +37,24 @@ impl Node {
         Node {
             value: NodeValue::Owned(value.into()),
             file_id: 0,
+        }
+    }
+
+    pub fn map<F>(&self, f: &F) -> Node where F: Fn(&Node) -> Option<Node> {
+        match f(&self) {
+            Some(n) => n,
+            None => {
+                match self.value {
+                    NodeValue::Owned(_) => self.clone(),
+                    NodeValue::Children(ref children) => {
+                        let new_children: Vec<Node> = children.iter().map(|n| n.map(f)).collect();
+                        Node {
+                            value: NodeValue::Children(new_children),
+                            file_id: self.file_id,
+                        }
+                    }
+                }
+            }
         }
     }
 
