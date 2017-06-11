@@ -1,8 +1,10 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use comrak;
+use std::path::Path;
 use parse::{Parser, Node, NodeValue};
+use comrak;
+use log;
 use directives;
 
 pub struct Evaluator {
@@ -38,7 +40,7 @@ impl Evaluator {
                         return match handler.handle(self, &children[1..]) {
                                    Ok(s) => s,
                                    Err(_) => {
-                                       println!("Error in directive {:?}", directive_name);
+                                       self.error(&children[1], &format!("Error in directive {}", directive_name));
                                        return "".to_owned();
                                    }
                                };
@@ -61,5 +63,20 @@ impl Evaluator {
         options.ext_table = true;
 
         comrak::markdown_to_html(markdown, &options)
+    }
+
+    pub fn log(&self, node: &Node, message: &str, level: log::LogLevel) {
+        let parser = self.parser.borrow();
+        let file_path = parser.get_node_source_path(node);
+        log!(level, "{}\n  --> {}:?:?", message, file_path.unwrap_or_else(|| Path::new("")).to_string_lossy());
+    }
+
+    #[allow(dead_code)]
+    pub fn warn(&self, node: &Node, message: &str) {
+        self.log(node, message, log::LogLevel::Warn);
+    }
+
+    pub fn error(&self, node: &Node, message: &str) {
+        self.log(node, message, log::LogLevel::Error);
     }
 }
