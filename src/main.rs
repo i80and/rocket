@@ -5,6 +5,7 @@ extern crate lazy_static;
 #[macro_use]
 extern crate log;
 extern crate simple_logger;
+extern crate syntect;
 extern crate regex;
 extern crate time;
 extern crate typed_arena;

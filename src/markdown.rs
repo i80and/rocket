@@ -1,5 +1,8 @@
-use comrak;
 use comrak::nodes::{TableAlignment, NodeValue, ListType, AstNode};
+use comrak;
+use syntect;
+use syntect::highlighting::ThemeSet;
+use syntect::parsing::SyntaxSet;
 use typed_arena::Arena;
 
 fn isspace(c: u8) -> bool {
@@ -11,6 +14,8 @@ fn isspace(c: u8) -> bool {
 
 pub struct MarkdownRenderer {
     options: comrak::ComrakOptions,
+    syntax_set: SyntaxSet,
+    theme_set: ThemeSet,
 }
 
 impl MarkdownRenderer {
@@ -20,13 +25,17 @@ impl MarkdownRenderer {
         options.ext_strikethrough = true;
         options.ext_table = true;
 
-        MarkdownRenderer { options: options }
+        MarkdownRenderer {
+            options: options,
+            syntax_set: SyntaxSet::load_defaults_newlines(),
+            theme_set: ThemeSet::load_defaults(),
+        }
     }
 
     pub fn render(&self, markdown: &str) -> String {
         let arena = Arena::new();
         let root = comrak::parse_document(&arena, markdown, &self.options);
-        let mut formatter = HtmlFormatter::new(&self.options);
+        let mut formatter = HtmlFormatter::new(self);
         formatter.format(root, false);
         formatter.flush();
         formatter.s
@@ -39,14 +48,18 @@ struct HtmlFormatter<'o> {
     s: String,
     last_level: u32,
     options: &'o comrak::ComrakOptions,
+    syntax_set: &'o SyntaxSet,
+    theme_set: &'o ThemeSet,
 }
 
 impl<'o> HtmlFormatter<'o> {
-    fn new(options: &'o comrak::ComrakOptions) -> Self {
+    fn new(renderer: &'o MarkdownRenderer) -> Self {
         HtmlFormatter {
             s: String::with_capacity(1024),
             last_level: 0,
-            options: options,
+            options: &renderer.options,
+            syntax_set: &renderer.syntax_set,
+            theme_set: &renderer.theme_set,
         }
     }
 
@@ -219,6 +232,7 @@ impl<'o> HtmlFormatter<'o> {
 
                     if ncb.info.is_empty() {
                         self.s += "<pre><code>";
+                        self.escape(&ncb.literal);
                     } else {
                         let mut first_tag = 0;
                         while first_tag < ncb.info.len() &&
@@ -226,17 +240,16 @@ impl<'o> HtmlFormatter<'o> {
                             first_tag += 1;
                         }
 
-                        if self.options.github_pre_lang {
-                            self.s += "<pre lang=\"";
-                            self.escape(&ncb.info[..first_tag]);
-                            self.s += "\"><code>";
-                        } else {
-                            self.s += "<pre><code class=\"language-";
-                            self.escape(&ncb.info[..first_tag]);
-                            self.s += "\">";
+                        self.s += "<pre lang=\"";
+                        self.escape(&ncb.info[..first_tag]);
+                        self.s += "\"><code>";
+
+                        match self.highlight(&ncb.info[..first_tag], &ncb.literal) {
+                            Ok(s) => { self.s += &s; },
+                            Err(_) => { self.escape(&ncb.literal); },
                         }
                     }
-                    self.escape(&ncb.literal);
+
                     self.s += "</code></pre>\n";
                 }
             }
@@ -432,6 +445,13 @@ impl<'o> HtmlFormatter<'o> {
             }
         }
         false
+    }
+
+    fn highlight(&self, language: &str, code: &str) -> Result<String, ()> {
+        let syntax = self.syntax_set.find_syntax_by_extension(language).ok_or(())?;
+        let theme = &self.theme_set.themes["base16-ocean.dark"];
+
+        Ok(syntect::html::highlighted_snippet_for_string(&code, &syntax, theme))
     }
 
     fn flush(&mut self) {
