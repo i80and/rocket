@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use comrak;
 use parse::{Parser, Node, NodeValue};
@@ -6,14 +7,14 @@ use directives;
 
 pub struct Evaluator {
     directives: HashMap<String, Box<directives::DirectiveHandler>>,
-    pub parser: Parser,
+    pub parser: RefCell<Parser>,
 }
 
 impl Evaluator {
     pub fn new() -> Evaluator {
         Evaluator {
             directives: HashMap::new(),
-            parser: Parser::new(),
+            parser: RefCell::new(Parser::new()),
         }
     }
 

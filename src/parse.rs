@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::prelude::*;
 use std::mem;
+use std::path::{Path, PathBuf};
 use std::str;
 use regex::Regex;
 
@@ -71,13 +72,15 @@ trait TokenHandler {
 struct StateRocket {
     root: Vec<Node>,
     buffer: Vec<String>,
+    file_id: FileID,
 }
 
 impl StateRocket {
-    fn new() -> StateRocket {
+    fn new(file_id: FileID) -> StateRocket {
         StateRocket {
             root: vec![Node::new_string("concat")],
             buffer: vec![],
+            file_id: file_id,
         }
     }
 
@@ -107,7 +110,7 @@ impl TokenHandler for StateRocket {
                     self.root.push(Node::new_string(self.buffer.concat()));
                     self.buffer.clear();
                 }
-                return StackRequest::Push(Box::new(StateExpression::new()));
+                return StackRequest::Push(Box::new(StateExpression::new(self.file_id)));
             }
             Token::RightParen => {
                 self.ensure_string().push(')');
@@ -145,16 +148,18 @@ impl TokenHandler for StateRocket {
 struct StateExpression {
     root: Vec<Node>,
     saw_rocket: bool,
+    file_id: FileID,
 
     quote: Vec<String>,
     in_quote: bool,
 }
 
 impl StateExpression {
-    fn new() -> StateExpression {
+    fn new(file_id: FileID) -> StateExpression {
         StateExpression {
             root: vec![],
             saw_rocket: false,
+            file_id: file_id,
             quote: vec![],
             in_quote: false,
         }
@@ -195,7 +200,7 @@ impl TokenHandler for StateExpression {
                 self.in_quote = true;
             }
             Token::StartBlock => {
-                return StackRequest::Push(Box::new(StateExpression::new()));
+                return StackRequest::Push(Box::new(StateExpression::new(self.file_id)));
             }
             Token::Rocket => {
                 self.saw_rocket = true;
@@ -207,7 +212,7 @@ impl TokenHandler for StateExpression {
             Token::Indent => {
                 if self.saw_rocket {
                     self.saw_rocket = false;
-                    return StackRequest::Push(Box::new(StateRocket::new()));
+                    return StackRequest::Push(Box::new(StateRocket::new(self.file_id)));
                 }
             }
         }
@@ -236,11 +241,12 @@ struct ParseContextStack {
 }
 
 impl ParseContextStack {
-    fn new() -> ParseContextStack {
+    fn new(file_id: FileID) -> ParseContextStack {
         ParseContextStack {
             stack: vec![Box::new(StateRocket {
                                      root: vec![Node::new_string("md")],
                                      buffer: vec![],
+                                     file_id: file_id,
                                  })],
         }
     }
@@ -264,19 +270,32 @@ impl ParseContextStack {
     }
 }
 
-pub struct Parser;
+pub struct Parser {
+    file_ids: Vec<PathBuf>,
+}
 
 impl Parser {
     pub fn new() -> Parser {
-        Parser
+        Parser { file_ids: vec![] }
     }
 
-    pub fn parse(&self, path: &str) -> Result<Node, ()> {
-        debug!("Parsing {}", path);
-        let mut file = match File::open(&path) {
+    pub fn get_node_source_path(&self, node: &Node) -> Option<&Path> {
+        match self.file_ids.get(node.file_id as usize) {
+            Some(p) => Some(p),
+            None => None,
+        }
+    }
+
+    pub fn parse(&mut self, path: &Path) -> Result<Node, ()> {
+        debug!("Parsing {}", path.to_string_lossy());
+
+        let id = self.file_ids.len() as FileID;
+        self.file_ids.push(path.to_owned());
+
+        let mut file = match File::open(path) {
             Ok(f) => f,
             Err(_) => {
-                error!("Failed to open {}", path);
+                error!("Failed to open {}", path.to_string_lossy());
                 return Err(());
             }
         };
@@ -284,7 +303,7 @@ impl Parser {
         file.read_to_string(&mut data)
             .expect("Failed to read input file");
 
-        let mut stack = ParseContextStack::new();
+        let mut stack = ParseContextStack::new(id);
         for token in lex(&data) {
             stack.handle(&token);
         }

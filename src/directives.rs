@@ -1,3 +1,4 @@
+use std::path::{Path, PathBuf};
 use parse::{Node, NodeValue};
 use evaluator::Evaluator;
 
@@ -197,8 +198,18 @@ impl DirectiveHandler for Include {
             return Err(());
         }
 
-        let path = evaluator.evaluate(&args[0]);
-        let node = match evaluator.parser.parse(&path) {
+        let mut path = PathBuf::from(evaluator.evaluate(&args[0]));
+        if !path.is_absolute() {
+            let parser = evaluator.parser.borrow();
+            let prefix = parser
+                .get_node_source_path(&args[0])
+                .expect("Node with unknown file ID")
+                .parent()
+                .unwrap_or_else(|| Path::new(""));
+            path = prefix.join(path.to_owned());
+        }
+
+        let node = match evaluator.parser.borrow_mut().parse(path.as_ref()) {
             Ok(n) => n,
             Err(_) => return Err(()),
         };

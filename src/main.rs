@@ -13,6 +13,7 @@ mod evaluator;
 mod lex;
 mod parse;
 
+use std::path::Path;
 use argparse::{ArgumentParser, StoreTrue};
 use evaluator::Evaluator;
 
@@ -57,7 +58,7 @@ fn main() {
 
     let start_time = time::precise_time_ns();
     for argument in option_inputs {
-        let node = match evaluator.parser.parse(&argument) {
+        let node = match evaluator.parser.borrow_mut().parse(Path::new(&argument)) {
             Ok(n) => n,
             Err(_) => {
                 continue;
