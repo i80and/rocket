@@ -40,8 +40,10 @@ impl Node {
         }
     }
 
-    pub fn map<F>(&self, f: &F) -> Node where F: Fn(&Node) -> Option<Node> {
-        match f(&self) {
+    pub fn map<F>(&self, f: &F) -> Node
+        where F: Fn(&Node) -> Option<Node>
+    {
+        match f(self) {
             Some(n) => n,
             None => {
                 match self.value {

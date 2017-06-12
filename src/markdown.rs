@@ -22,9 +22,7 @@ impl MarkdownRenderer {
         options.ext_strikethrough = true;
         options.ext_table = true;
 
-        MarkdownRenderer {
-            options: options,
-        }
+        MarkdownRenderer { options: options }
     }
 
     pub fn render(&self, markdown: &str, highlighter: &SyntaxHighlighter) -> String {
@@ -237,9 +235,14 @@ impl<'o> HtmlFormatter<'o> {
                         self.escape(&ncb.info[..first_tag]);
                         self.s += "\"><code>";
 
-                        match self.highlighter.highlight(&ncb.info[..first_tag], &ncb.literal) {
-                            Ok(s) => { self.s += &s; },
-                            Err(_) => { self.escape(&ncb.literal); },
+                        match self.highlighter
+                                  .highlight(&ncb.info[..first_tag], &ncb.literal) {
+                            Ok(s) => {
+                                self.s += &s;
+                            }
+                            Err(_) => {
+                                self.escape(&ncb.literal);
+                            }
                         }
                     }
 

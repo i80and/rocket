@@ -21,12 +21,13 @@ impl SyntaxHighlighter {
     }
 
     pub fn highlight(&self, language: &str, code: &str) -> Result<String, ()> {
-        let syntax_set = self.syntax_set.borrow_with(|| SyntaxSet::load_defaults_newlines());
-        let theme_set = self.theme_set.borrow_with(|| ThemeSet::load_defaults());
+        let syntax_set = self.syntax_set
+            .borrow_with(SyntaxSet::load_defaults_newlines);
+        let theme_set = self.theme_set.borrow_with(ThemeSet::load_defaults);
 
         let syntax = syntax_set.find_syntax_by_extension(language).ok_or(())?;
         let theme = &theme_set.themes[&self.theme];
 
-        Ok(syntect::html::highlighted_snippet_for_string(&code, &syntax, theme))
+        Ok(syntect::html::highlighted_snippet_for_string(code, syntax, theme))
     }
 }
