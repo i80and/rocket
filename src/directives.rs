@@ -76,7 +76,7 @@ impl DirectiveHandler for Admonition {
             _ => return Err(()),
         };
 
-        let body = evaluator.markdown.render(&raw_body);
+        let body = evaluator.markdown.render(&raw_body, &evaluator.highlighter);
         Ok(format!("<div class=\"admonition admonition-{}\"><span class=\"admonition-title admonition-title-{}\">{}</span>{}</div>\n",
                    self.class,
                    self.class,
@@ -115,7 +115,7 @@ impl DirectiveHandler for Markdown {
             .map(|node| evaluator.evaluate(node))
             .fold(String::new(), |r, c| r + &c);
 
-        let rendered = evaluator.markdown.render(&body).trim().to_owned();
+        let rendered = evaluator.markdown.render(&body, &evaluator.highlighter).trim().to_owned();
         Ok(rendered)
     }
 }
@@ -172,7 +172,7 @@ impl DirectiveHandler for DefinitionList {
 
                          let term = evaluator.evaluate(&children[0]);
                          let definition =
-                             evaluator.markdown.render(&evaluator.evaluate(&children[1]));
+                             evaluator.markdown.render(&evaluator.evaluate(&children[1]), &evaluator.highlighter);
                          Ok(format!("<dt>{}</dt><dd>{}</dd>", term, definition))
                      }
                  })

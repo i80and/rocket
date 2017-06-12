@@ -5,20 +5,28 @@ use std::path::Path;
 use parse::{Parser, Node, NodeValue};
 use log;
 use directives;
+use highlighter::{self, SyntaxHighlighter};
 use markdown;
 
 pub struct Evaluator {
     directives: HashMap<String, Box<directives::DirectiveHandler>>,
     pub parser: RefCell<Parser>,
     pub markdown: markdown::MarkdownRenderer,
+    pub highlighter: SyntaxHighlighter,
 }
 
 impl Evaluator {
-    pub fn new() -> Evaluator {
+    #[allow(dead_code)]
+    pub fn new() -> Self {
+        Self::new_with_options(highlighter::DEFAULT_SYNTAX_THEME)
+    }
+
+    pub fn new_with_options(syntax_theme: &str) -> Self {
         Evaluator {
             directives: HashMap::new(),
             parser: RefCell::new(Parser::new()),
             markdown: markdown::MarkdownRenderer::new(),
+            highlighter: SyntaxHighlighter::new(syntax_theme),
         }
     }
 

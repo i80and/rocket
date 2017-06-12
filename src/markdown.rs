@@ -1,10 +1,8 @@
 use comrak::nodes::{TableAlignment, NodeValue, ListType, AstNode};
 use comrak;
-use syntect;
-use syntect::highlighting::ThemeSet;
-use syntect::parsing::SyntaxSet;
-use lazycell::LazyCell;
 use typed_arena::Arena;
+
+use highlighter::SyntaxHighlighter;
 
 fn isspace(c: u8) -> bool {
     match c as char {
@@ -15,8 +13,6 @@ fn isspace(c: u8) -> bool {
 
 pub struct MarkdownRenderer {
     options: comrak::ComrakOptions,
-    syntax_set: LazyCell<SyntaxSet>,
-    theme_set: LazyCell<ThemeSet>,
 }
 
 impl MarkdownRenderer {
@@ -28,15 +24,13 @@ impl MarkdownRenderer {
 
         MarkdownRenderer {
             options: options,
-            syntax_set: LazyCell::new(),
-            theme_set: LazyCell::new(),
         }
     }
 
-    pub fn render(&self, markdown: &str) -> String {
+    pub fn render(&self, markdown: &str, highlighter: &SyntaxHighlighter) -> String {
         let arena = Arena::new();
         let root = comrak::parse_document(&arena, markdown, &self.options);
-        let mut formatter = HtmlFormatter::new(self);
+        let mut formatter = HtmlFormatter::new(self, highlighter);
         formatter.format(root, false);
         formatter.flush();
         formatter.s
@@ -49,18 +43,16 @@ struct HtmlFormatter<'o> {
     s: String,
     last_level: u32,
     options: &'o comrak::ComrakOptions,
-    syntax_set: &'o SyntaxSet,
-    theme_set: &'o ThemeSet,
+    highlighter: &'o SyntaxHighlighter,
 }
 
 impl<'o> HtmlFormatter<'o> {
-    fn new(renderer: &'o MarkdownRenderer) -> Self {
+    fn new(renderer: &'o MarkdownRenderer, highlighter: &'o SyntaxHighlighter) -> Self {
         HtmlFormatter {
             s: String::with_capacity(1024),
             last_level: 0,
             options: &renderer.options,
-            syntax_set: renderer.syntax_set.borrow_with(|| SyntaxSet::load_defaults_newlines()),
-            theme_set: renderer.theme_set.borrow_with(|| ThemeSet::load_defaults()),
+            highlighter: highlighter,
         }
     }
 
@@ -245,7 +237,7 @@ impl<'o> HtmlFormatter<'o> {
                         self.escape(&ncb.info[..first_tag]);
                         self.s += "\"><code>";
 
-                        match self.highlight(&ncb.info[..first_tag], &ncb.literal) {
+                        match self.highlighter.highlight(&ncb.info[..first_tag], &ncb.literal) {
                             Ok(s) => { self.s += &s; },
                             Err(_) => { self.escape(&ncb.literal); },
                         }
@@ -446,13 +438,6 @@ impl<'o> HtmlFormatter<'o> {
             }
         }
         false
-    }
-
-    fn highlight(&self, language: &str, code: &str) -> Result<String, ()> {
-        let syntax = self.syntax_set.find_syntax_by_extension(language).ok_or(())?;
-        let theme = &self.theme_set.themes["base16-ocean.dark"];
-
-        Ok(syntect::html::highlighted_snippet_for_string(&code, &syntax, theme))
     }
 
     fn flush(&mut self) {
