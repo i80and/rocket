@@ -3,6 +3,7 @@ use comrak;
 use syntect;
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
+use lazycell::LazyCell;
 use typed_arena::Arena;
 
 fn isspace(c: u8) -> bool {
@@ -14,8 +15,8 @@ fn isspace(c: u8) -> bool {
 
 pub struct MarkdownRenderer {
     options: comrak::ComrakOptions,
-    syntax_set: SyntaxSet,
-    theme_set: ThemeSet,
+    syntax_set: LazyCell<SyntaxSet>,
+    theme_set: LazyCell<ThemeSet>,
 }
 
 impl MarkdownRenderer {
@@ -27,8 +28,8 @@ impl MarkdownRenderer {
 
         MarkdownRenderer {
             options: options,
-            syntax_set: SyntaxSet::load_defaults_newlines(),
-            theme_set: ThemeSet::load_defaults(),
+            syntax_set: LazyCell::new(),
+            theme_set: LazyCell::new(),
         }
     }
 
@@ -58,8 +59,8 @@ impl<'o> HtmlFormatter<'o> {
             s: String::with_capacity(1024),
             last_level: 0,
             options: &renderer.options,
-            syntax_set: &renderer.syntax_set,
-            theme_set: &renderer.theme_set,
+            syntax_set: renderer.syntax_set.borrow_with(|| SyntaxSet::load_defaults_newlines()),
+            theme_set: renderer.theme_set.borrow_with(|| ThemeSet::load_defaults()),
         }
     }
 

@@ -1,5 +1,6 @@
 extern crate argparse;
 extern crate comrak;
+extern crate lazycell;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
