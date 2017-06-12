@@ -1,13 +1,15 @@
 extern crate argparse;
 extern crate comrak;
+extern crate handlebars;
 extern crate lazycell;
 #[macro_use]
 extern crate lazy_static;
-extern crate liquid;
 #[macro_use]
 extern crate log;
 #[macro_use]
 extern crate serde_derive;
+#[macro_use]
+extern crate serde_json;
 extern crate simple_logger;
 extern crate syntect;
 extern crate regex;
@@ -21,6 +23,7 @@ mod highlighter;
 mod lex;
 mod markdown;
 mod parse;
+mod theme;
 mod util;
 
 use std::fs::{self, File};
@@ -31,34 +34,37 @@ use argparse::{ArgumentParser, StoreTrue};
 use evaluator::Evaluator;
 
 #[derive(Deserialize)]
-struct ConfigFile {
+struct RawConfig {
     syntax_theme: Option<String>,
     theme: Option<PathBuf>,
     content_dir: Option<PathBuf>,
     output: Option<PathBuf>,
 }
 
-struct ConfigOptions {
+struct Project {
     verbose: bool,
     syntax_theme: String,
-    theme: PathBuf,
+    theme: theme::Theme,
     content_dir: PathBuf,
     output: PathBuf,
 }
 
-impl ConfigOptions {
-    fn read_toml(path: &Path) -> Result<ConfigOptions, ()> {
+impl Project {
+    fn read_toml(path: &Path) -> Result<Project, ()> {
         let mut file = File::open(path).or(Err(()))?;
         let mut data = String::new();
         file.read_to_string(&mut data).or(Err(()))?;
+        let config: RawConfig = toml::from_str(&data).or(Err(()))?;
 
-        let config: ConfigFile = toml::from_str(&data).or(Err(()))?;
-        Ok(ConfigOptions {
+        let theme_path = config.theme.ok_or(())?;
+        let theme = theme::Theme::load(&theme_path)?;
+
+        Ok(Project {
                verbose: false,
                syntax_theme: config
                    .syntax_theme
                    .unwrap_or_else(|| highlighter::DEFAULT_SYNTAX_THEME.to_owned()),
-               theme: config.theme.unwrap_or_else(|| PathBuf::from("theme")),
+               theme: theme,
                content_dir: config
                    .content_dir
                    .unwrap_or_else(|| PathBuf::from("content")),
@@ -75,6 +81,7 @@ impl ConfigOptions {
             }
         };
         let output = evaluator.evaluate(&node);
+        let rendered = self.theme.render("default", &output).or(Err(()))?;
 
         let path_from_content_root = path.strip_prefix(&self.content_dir)
             .expect("Failed to get output path");
@@ -84,7 +91,7 @@ impl ConfigOptions {
 
         fs::create_dir_all(output_dir).or(Err(()))?;
         let mut file = File::create(&output_path).or(Err(()))?;
-        file.write_all(output.as_bytes()).or(Err(()))?;
+        file.write_all(rendered.as_bytes()).or(Err(()))?;
 
         Ok(())
     }
@@ -119,7 +126,7 @@ impl ConfigOptions {
 }
 
 fn main() {
-    let mut config = ConfigOptions::read_toml(Path::new("config.toml"))
+    let mut config = Project::read_toml(Path::new("config.toml"))
         .expect("Failed to open config.toml");
 
     {
