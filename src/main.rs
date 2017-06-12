@@ -73,8 +73,10 @@ impl ConfigOptions {
         let output = evaluator.evaluate(&node);
 
         let path_from_content_root = path.strip_prefix(&self.content_dir).expect("Failed to get output path");
-        let output_path = self.output.join(path_from_content_root);
+        let mut output_path = self.output.join(path_from_content_root);
+        output_path.set_extension("html");
         let output_dir = output_path.parent().expect("Couldn't get output directory");
+
         fs::create_dir_all(output_dir).or(Err(()))?;
         let mut file = File::create(&output_path).or(Err(()))?;
         file.write_all(output.as_bytes()).or(Err(()))?;
