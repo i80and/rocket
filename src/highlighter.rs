@@ -3,7 +3,7 @@ use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
 use syntect;
 
-pub static DEFAULT_SYNTAX_THEME: &str = "base16-mexico.light";
+pub static DEFAULT_SYNTAX_THEME: &str = "base16-ocean.light";
 
 pub struct SyntaxHighlighter {
     syntax_set: LazyCell<SyntaxSet>,
