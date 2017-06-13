@@ -85,6 +85,7 @@ impl Evaluator {
     pub fn reset(&self) {
         self.ctx.borrow_mut().clear();
         self.theme_config.borrow_mut().clear();
+        self.variable_stack.borrow_mut().clear();
     }
 
     fn lookup(&self, node: &Node, key: &str, args: &[Node]) -> Result<String, ()> {
