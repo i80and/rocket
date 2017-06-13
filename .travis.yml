@@ -1,0 +1,17 @@
+language: rust
+sudo: false
+dist: trusty
+
+matrix:
+    include:
+        - rust: stable
+        - rust: beta
+
+addons:
+    apt:
+        packages:
+            - cmake
+
+notifications:
+    email: false
+
