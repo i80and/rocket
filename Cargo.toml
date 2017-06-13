@@ -6,6 +6,7 @@ authors = ["Andrew Aldridge <i80and@foxquill.com>"]
 [dependencies]
 argparse = "0.2.1"
 comrak = "0.1.4"
+glob = "0.2.11"
 handlebars = "0.27.0"
 lazy_static = "0.2.8"
 lazycell = "0.5.1"

@@ -29,21 +29,27 @@ impl Theme {
 
         for (ref template_name, ref template_path) in config.templates.iter() {
             let template_path = theme_dir_path.join(template_path);
-            handlebars.register_template_file(template_name, template_path).ok().unwrap();
+            handlebars
+                .register_template_file(template_name, template_path)
+                .ok()
+                .unwrap();
         }
 
         let constants = match config.constants {
             Some(c) => c,
-            None => json!({})
+            None => json!({}),
         };
 
         Ok(Theme {
-            handlebars: handlebars,
-            constants: constants,
-        })
+               handlebars: handlebars,
+               constants: constants,
+           })
     }
 
-    pub fn render(&self, template_name: &str, body: &str) -> Result<String, handlebars::RenderError> {
+    pub fn render(&self,
+                  template_name: &str,
+                  body: &str)
+                  -> Result<String, handlebars::RenderError> {
         let args = json!({
             "theme": self.constants.clone(),
             "body": body,

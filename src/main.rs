@@ -1,5 +1,6 @@
 extern crate argparse;
 extern crate comrak;
+extern crate glob;
 extern crate handlebars;
 extern crate lazycell;
 #[macro_use]
@@ -26,6 +27,7 @@ mod parse;
 mod theme;
 mod util;
 
+use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::Read;
 use std::io::Write;
@@ -39,6 +41,7 @@ struct RawConfig {
     theme: Option<PathBuf>,
     content_dir: Option<PathBuf>,
     output: Option<PathBuf>,
+    use_specific_templates: Option<HashMap<String, String>>,
 }
 
 struct Project {
@@ -47,6 +50,7 @@ struct Project {
     theme: theme::Theme,
     content_dir: PathBuf,
     output: PathBuf,
+    use_specific_templates: Vec<(glob::Pattern, String)>,
 }
 
 impl Project {
@@ -59,6 +63,21 @@ impl Project {
         let theme_path = config.theme.ok_or(())?;
         let theme = theme::Theme::load(&theme_path)?;
 
+        let path_patterns: Result<Vec<_>, ()> = config
+            .use_specific_templates
+            .unwrap_or_else(|| HashMap::new())
+            .iter()
+            .map(|(ref k, v)| {
+                     let pattern = match glob::Pattern::new(&k) {
+                         Ok(p) => p,
+                         Err(_) => return Err(()),
+                     };
+                     Ok((pattern, v.to_owned()))
+                 })
+            .collect();
+
+        let path_patterns = path_patterns.or(Err(()))?;
+
         Ok(Project {
                verbose: false,
                syntax_theme: config
@@ -69,6 +88,7 @@ impl Project {
                    .content_dir
                    .unwrap_or_else(|| PathBuf::from("content")),
                output: config.output.unwrap_or_else(|| PathBuf::from("build")),
+               use_specific_templates: path_patterns,
            })
     }
 
@@ -81,7 +101,15 @@ impl Project {
             }
         };
         let output = evaluator.evaluate(&node);
-        let rendered = self.theme.render("default", &output).or(Err(()))?;
+
+        // Find the template that matches this path
+        let template_name = self.use_specific_templates
+            .iter()
+            .find(|&&(ref pat, _)| pat.matches_path(path))
+            .map(|&(_, ref name)| name.as_ref())
+            .unwrap_or("default");
+
+        let rendered = self.theme.render(template_name, &output).or(Err(()))?;
 
         let path_from_content_root = path.strip_prefix(&self.content_dir)
             .expect("Failed to get output path");
