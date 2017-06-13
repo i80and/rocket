@@ -41,7 +41,7 @@ struct RawConfig {
     theme: Option<PathBuf>,
     content_dir: Option<PathBuf>,
     output: Option<PathBuf>,
-    use_specific_templates: Option<HashMap<String, String>>,
+    templates: HashMap<String, String>,
 }
 
 struct Project {
@@ -50,7 +50,7 @@ struct Project {
     theme: theme::Theme,
     content_dir: PathBuf,
     output: PathBuf,
-    use_specific_templates: Vec<(glob::Pattern, String)>,
+    templates: Vec<(glob::Pattern, String)>,
 }
 
 impl Project {
@@ -64,11 +64,10 @@ impl Project {
         let theme = theme::Theme::load(&theme_path)?;
 
         let path_patterns: Result<Vec<_>, ()> = config
-            .use_specific_templates
-            .unwrap_or_else(|| HashMap::new())
+            .templates
             .iter()
-            .map(|(ref k, v)| {
-                     let pattern = match glob::Pattern::new(&k) {
+            .map(|(k, v)| {
+                     let pattern = match glob::Pattern::new(k) {
                          Ok(p) => p,
                          Err(_) => return Err(()),
                      };
@@ -88,7 +87,7 @@ impl Project {
                    .content_dir
                    .unwrap_or_else(|| PathBuf::from("content")),
                output: config.output.unwrap_or_else(|| PathBuf::from("build")),
-               use_specific_templates: path_patterns,
+               templates: path_patterns,
            })
     }
 
@@ -103,7 +102,7 @@ impl Project {
         let output = evaluator.evaluate(&node);
 
         // Find the template that matches this path
-        let template_name = self.use_specific_templates
+        let template_name = self.templates
             .iter()
             .find(|&&(ref pat, _)| pat.matches_path(path))
             .map(|&(_, ref name)| name.as_ref())

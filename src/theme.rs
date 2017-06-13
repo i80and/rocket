@@ -27,7 +27,7 @@ impl Theme {
         file.read_to_string(&mut data).or(Err(()))?;
         let config: RawConfig = toml::from_str(&data).or(Err(()))?;
 
-        for (ref template_name, ref template_path) in config.templates.iter() {
+        for (template_name, template_path) in &config.templates {
             let template_path = theme_dir_path.join(template_path);
             handlebars
                 .register_template_file(template_name, template_path)
