@@ -13,6 +13,7 @@ pub struct Evaluator {
     pub parser: RefCell<Parser>,
     pub markdown: markdown::MarkdownRenderer,
     pub highlighter: SyntaxHighlighter,
+    pub ctx: RefCell<HashMap<String, NodeValue>>,
 }
 
 impl Evaluator {
@@ -27,6 +28,7 @@ impl Evaluator {
             parser: RefCell::new(Parser::new()),
             markdown: markdown::MarkdownRenderer::new(),
             highlighter: SyntaxHighlighter::new(syntax_theme),
+            ctx: RefCell::new(HashMap::new()),
         }
     }
 

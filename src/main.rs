@@ -99,6 +99,7 @@ impl Project {
                 return Err(());
             }
         };
+
         let output = evaluator.evaluate(&node);
 
         // Find the template that matches this path
@@ -120,6 +121,7 @@ impl Project {
         let mut file = File::create(&output_path).or(Err(()))?;
         file.write_all(rendered.as_bytes()).or(Err(()))?;
 
+        evaluator.ctx.borrow_mut().clear();
         Ok(())
     }
 
@@ -140,6 +142,8 @@ impl Project {
         evaluator.register("include", Box::new(directives::Include::new()));
         evaluator.register("null", Box::new(directives::Dummy::new()));
         evaluator.register("let", Box::new(directives::Let::new()));
+        evaluator.register("define", Box::new(directives::Define::new()));
+        evaluator.register("get", Box::new(directives::Get::new()));
 
         util::visit_dirs(self.content_dir.as_ref(),
                          &|path| match self.build_file(&evaluator, path) {
