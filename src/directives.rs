@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use serde_json;
 use parse::{Node, NodeValue};
@@ -241,7 +240,7 @@ impl DirectiveHandler for Let {
             return Err(());
         }
 
-        let mut replacements = HashMap::new();
+        let mut variables = Vec::new();
         let kvs = &args[0];
         match kvs.value {
             NodeValue::Owned(_) => {
@@ -256,38 +255,28 @@ impl DirectiveHandler for Let {
                     let evaluated_key = evaluator.evaluate(&pair[0]);
                     let evaluated_value = evaluator.evaluate(&pair[1]);
 
-                    replacements.insert(evaluated_key, evaluated_value);
+                    variables.push((evaluated_key, evaluated_value));
                 }
             }
         }
 
-        let mut result = String::with_capacity(128);
+        evaluator
+            .variable_stack
+            .borrow_mut()
+            .extend_from_slice(&variables);
 
-        for node in &args[1..] {
-            let new_node = node.map(&|candidate| match candidate.value {
-                                        NodeValue::Owned(_) => None,
-                                        NodeValue::Children(ref children) => {
-                                            if children.is_empty() {
-                                                return None;
-                                            }
+        let concat = Concat::new();
+        let result = concat.handle(evaluator, &args[1..]);
 
-                                            if let NodeValue::Owned(ref key) = children[0].value {
-                                                if let Some(new_value) = replacements.get(key) {
-                        return Some(Node {
-                                        value: NodeValue::Owned(new_value.to_owned()),
-                                        file_id: candidate.file_id,
-                                    });
-                    }
-                                            }
-
-                                            None
-                                        }
-                                    });
-
-            result += &evaluator.evaluate(&new_node);
+        for _ in 0..variables.len() {
+            evaluator
+                .variable_stack
+                .borrow_mut()
+                .pop()
+                .expect("Variable stack length mismatch");
         }
 
-        Ok(result)
+        result
     }
 }
 

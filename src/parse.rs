@@ -40,26 +40,6 @@ impl Node {
         }
     }
 
-    pub fn map<F>(&self, f: &F) -> Node
-        where F: Fn(&Node) -> Option<Node>
-    {
-        match f(self) {
-            Some(n) => n,
-            None => {
-                match self.value {
-                    NodeValue::Owned(_) => self.clone(),
-                    NodeValue::Children(ref children) => {
-                        let new_children: Vec<Node> = children.iter().map(|n| n.map(f)).collect();
-                        Node {
-                            value: NodeValue::Children(new_children),
-                            file_id: self.file_id,
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     #[allow(dead_code)]
     pub fn print(&self, indent: usize) {
         match self.value {

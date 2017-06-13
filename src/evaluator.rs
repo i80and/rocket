@@ -15,6 +15,7 @@ pub struct Evaluator {
     pub markdown: markdown::MarkdownRenderer,
     pub highlighter: SyntaxHighlighter,
 
+    pub variable_stack: RefCell<Vec<(String, String)>>,
     pub ctx: RefCell<HashMap<String, NodeValue>>,
     pub theme_config: RefCell<serde_json::map::Map<String, serde_json::Value>>,
 }
@@ -31,6 +32,7 @@ impl Evaluator {
             parser: RefCell::new(Parser::new()),
             markdown: markdown::MarkdownRenderer::new(),
             highlighter: SyntaxHighlighter::new(syntax_theme),
+            variable_stack: RefCell::new(vec![]),
             ctx: RefCell::new(HashMap::new()),
             theme_config: RefCell::new(serde_json::map::Map::new()),
         }
@@ -52,20 +54,8 @@ impl Evaluator {
                         NodeValue::Children(_) => Cow::Owned(self.evaluate(first_element)),
                     };
 
-                    if let Some(handler) = self.directives.get(directive_name.as_ref()) {
-                        return match handler.handle(self, &children[1..]) {
-                                   Ok(s) => s,
-                                   Err(_) => {
-                                       self.error(&children[1],
-                                                  &format!("Error in directive {}",
-                                                          directive_name));
-                                       return "".to_owned();
-                                   }
-                               };
-                    }
-
-                    println!("Unknown directive {:?}", directive_name);
-                    "".to_owned()
+                    self.lookup(node, directive_name.as_ref(), &children[1..])
+                        .unwrap_or_else(|_| "".to_owned())
                 } else {
                     println!("Empty node");
                     "".to_owned()
@@ -95,5 +85,35 @@ impl Evaluator {
     pub fn reset(&self) {
         self.ctx.borrow_mut().clear();
         self.theme_config.borrow_mut().clear();
+    }
+
+    fn lookup(&self, node: &Node, key: &str, args: &[Node]) -> Result<String, ()> {
+        let var = self.variable_stack
+            .borrow()
+            .iter()
+            .rev()
+            .find(|&&(ref k, _)| k == key)
+            .map(|&(_, ref v)| v.to_owned());
+
+        if let Some(value) = var {
+            if !args.is_empty() {
+                return Err(());
+            }
+
+            return Ok(value.to_owned());
+        }
+
+        if let Some(handler) = self.directives.get(key) {
+            return match handler.handle(self, args) {
+                       Ok(result) => Ok(result),
+                       Err(_) => {
+                           self.error(node, &format!("Error in directive {}", key));
+                           Err(())
+                       }
+                   };
+        }
+
+        self.error(node, &format!("Unknown directive {}", key));
+        Err(())
     }
 }
