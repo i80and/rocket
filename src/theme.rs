@@ -9,12 +9,12 @@ use toml;
 #[derive(Deserialize)]
 struct RawConfig {
     templates: HashMap<String, PathBuf>,
-    constants: Option<serde_json::Value>,
+    constants: Option<serde_json::map::Map<String, serde_json::Value>>,
 }
 
 pub struct Theme {
     handlebars: Handlebars,
-    constants: serde_json::Value,
+    constants: serde_json::map::Map<String, serde_json::Value>,
 }
 
 impl Theme {
@@ -35,11 +35,7 @@ impl Theme {
                 .unwrap();
         }
 
-        let constants = match config.constants {
-            Some(c) => c,
-            None => json!({}),
-        };
-
+        let constants = config.constants.unwrap_or_else(serde_json::map::Map::new);
         Ok(Theme {
                handlebars: handlebars,
                constants: constants,
@@ -48,12 +44,19 @@ impl Theme {
 
     pub fn render(&self,
                   template_name: &str,
-                  body: &str)
+                  body: &str,
+                  project_args: &serde_json::map::Map<String, serde_json::Value>)
                   -> Result<String, handlebars::RenderError> {
-        let args = json!({
-            "theme": self.constants.clone(),
+        let mut args = self.constants.clone();
+
+        for (key, value) in project_args {
+            args.insert(key.clone(), value.clone());
+        }
+
+        let ctx = json!({
+            "args": args,
             "body": body,
         });
-        self.handlebars.render(template_name, &args)
+        self.handlebars.render(template_name, &ctx)
     }
 }

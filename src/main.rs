@@ -42,6 +42,7 @@ struct RawConfig {
     content_dir: Option<PathBuf>,
     output: Option<PathBuf>,
     templates: HashMap<String, String>,
+    theme_constants: Option<serde_json::map::Map<String, serde_json::Value>>,
 }
 
 struct Project {
@@ -51,6 +52,7 @@ struct Project {
     content_dir: PathBuf,
     output: PathBuf,
     templates: Vec<(glob::Pattern, String)>,
+    theme_constants: serde_json::map::Map<String, serde_json::Value>,
 }
 
 impl Project {
@@ -88,6 +90,9 @@ impl Project {
                    .unwrap_or_else(|| PathBuf::from("content")),
                output: config.output.unwrap_or_else(|| PathBuf::from("build")),
                templates: path_patterns,
+               theme_constants: config
+                   .theme_constants
+                   .unwrap_or_else(serde_json::map::Map::new),
            })
     }
 
@@ -109,7 +114,9 @@ impl Project {
             .map(|&(_, ref name)| name.as_ref())
             .unwrap_or("default");
 
-        let rendered = self.theme.render(template_name, &output).or(Err(()))?;
+        let rendered = self.theme
+            .render(template_name, &output, &self.theme_constants)
+            .or(Err(()))?;
 
         let path_from_content_root = path.strip_prefix(&self.content_dir)
             .expect("Failed to get output path");
