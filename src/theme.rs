@@ -45,16 +45,13 @@ impl Theme {
     pub fn render(&self,
                   template_name: &str,
                   body: &str,
-                  project_args: &serde_json::map::Map<String, serde_json::Value>)
+                  project_args: &serde_json::map::Map<String, serde_json::Value>,
+                  page_args: &serde_json::map::Map<String, serde_json::Value>)
                   -> Result<String, handlebars::RenderError> {
-        let mut args = self.constants.clone();
-
-        for (key, value) in project_args {
-            args.insert(key.clone(), value.clone());
-        }
-
         let ctx = json!({
-            "args": args,
+            "page": page_args,
+            "project": project_args,
+            "theme": self.constants,
             "body": body,
         });
         self.handlebars.render(template_name, &ctx)

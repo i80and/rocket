@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use serde_json;
 use parse::{Node, NodeValue};
 use evaluator::Evaluator;
 
@@ -342,6 +343,34 @@ impl DirectiveHandler for Get {
     }
 }
 
+pub struct ThemeConfig;
+
+impl ThemeConfig {
+    pub fn new() -> ThemeConfig {
+        ThemeConfig
+    }
+}
+
+impl DirectiveHandler for ThemeConfig {
+    fn handle(&self, evaluator: &Evaluator, args: &[Node]) -> Result<String, ()> {
+        if args.len() % 2 != 0 {
+            return Err(());
+        }
+
+        for pair in args.chunks(2) {
+            let key = evaluator.evaluate(&pair[0]);
+            let value = evaluator.evaluate(&pair[1]);
+
+            evaluator
+                .theme_config
+                .borrow_mut()
+                .insert(key, serde_json::Value::String(value));
+        }
+
+        Ok("".to_owned())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -493,5 +522,18 @@ mod tests {
         assert!(handler.handle(&evaluator, &[]).is_err());
         assert_eq!(handler.handle(&evaluator, &[Node::new_string("foo")]),
                    Ok("foobar".to_owned()));
+    }
+
+    #[test]
+    fn test_theme_config() {
+        let evaluator = Evaluator::new();
+        let handler = ThemeConfig::new();
+
+        assert_eq!(handler.handle(&evaluator, &[]), Ok("".to_owned()));
+        assert_eq!(handler.handle(&evaluator,
+                                  &[Node::new_string("foo"), Node::new_string("bar")]),
+                   Ok("".to_owned()));
+        assert_eq!(evaluator.theme_config.borrow().get("foo"),
+                   Some(&serde_json::Value::String("bar".to_owned())));
     }
 }

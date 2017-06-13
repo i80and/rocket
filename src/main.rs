@@ -115,7 +115,10 @@ impl Project {
             .unwrap_or("default");
 
         let rendered = self.theme
-            .render(template_name, &output, &self.theme_constants)
+            .render(template_name,
+                    &output,
+                    &self.theme_constants,
+                    &evaluator.theme_config.borrow())
             .or(Err(()))?;
 
         let path_from_content_root = path.strip_prefix(&self.content_dir)
@@ -128,7 +131,7 @@ impl Project {
         let mut file = File::create(&output_path).or(Err(()))?;
         file.write_all(rendered.as_bytes()).or(Err(()))?;
 
-        evaluator.ctx.borrow_mut().clear();
+        evaluator.reset();
         Ok(())
     }
 
@@ -151,6 +154,7 @@ impl Project {
         evaluator.register("let", Box::new(directives::Let::new()));
         evaluator.register("define", Box::new(directives::Define::new()));
         evaluator.register("get", Box::new(directives::Get::new()));
+        evaluator.register("theme-config", Box::new(directives::ThemeConfig::new()));
 
         util::visit_dirs(self.content_dir.as_ref(),
                          &|path| match self.build_file(&evaluator, path) {

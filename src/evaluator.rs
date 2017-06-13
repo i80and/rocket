@@ -2,18 +2,21 @@ use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
-use parse::{Parser, Node, NodeValue};
 use log;
+use serde_json;
 use directives;
 use highlighter::{self, SyntaxHighlighter};
 use markdown;
+use parse::{Parser, Node, NodeValue};
 
 pub struct Evaluator {
     directives: HashMap<String, Box<directives::DirectiveHandler>>,
     pub parser: RefCell<Parser>,
     pub markdown: markdown::MarkdownRenderer,
     pub highlighter: SyntaxHighlighter,
+
     pub ctx: RefCell<HashMap<String, NodeValue>>,
+    pub theme_config: RefCell<serde_json::map::Map<String, serde_json::Value>>,
 }
 
 impl Evaluator {
@@ -29,6 +32,7 @@ impl Evaluator {
             markdown: markdown::MarkdownRenderer::new(),
             highlighter: SyntaxHighlighter::new(syntax_theme),
             ctx: RefCell::new(HashMap::new()),
+            theme_config: RefCell::new(serde_json::map::Map::new()),
         }
     }
 
@@ -86,5 +90,10 @@ impl Evaluator {
 
     pub fn error(&self, node: &Node, message: &str) {
         self.log(node, message, log::LogLevel::Error);
+    }
+
+    pub fn reset(&self) {
+        self.ctx.borrow_mut().clear();
+        self.theme_config.borrow_mut().clear();
     }
 }
