@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use page::Page;
+use toctree::TocTree;
 use handlebars::{self, Handlebars};
 use serde_json;
 use toml;
@@ -44,15 +46,16 @@ impl Theme {
 
     pub fn render(&self,
                   template_name: &str,
-                  body: &str,
                   project_args: &serde_json::map::Map<String, serde_json::Value>,
-                  page_args: &serde_json::map::Map<String, serde_json::Value>)
+                  page: &Page,
+                  toctree: &TocTree)
                   -> Result<String, handlebars::RenderError> {
         let ctx = json!({
-            "page": page_args,
+            "page": &page.theme_config,
             "project": project_args,
             "theme": self.constants,
-            "body": body,
+            "body": &page.body,
+            "toc": toctree.generate_html(""),
         });
         self.handlebars.render(template_name, &ctx)
     }

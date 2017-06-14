@@ -17,15 +17,17 @@ extern crate regex;
 extern crate time;
 extern crate toml;
 extern crate typed_arena;
+extern crate walkdir;
 
 mod directives;
 mod evaluator;
 mod highlighter;
 mod lex;
 mod markdown;
+mod page;
 mod parse;
 mod theme;
-mod util;
+mod toctree;
 
 use std::collections::HashMap;
 use std::fs::{self, File};
@@ -34,6 +36,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use argparse::{ArgumentParser, StoreTrue};
 use evaluator::Evaluator;
+use page::Page;
 
 #[derive(Deserialize)]
 struct RawConfig {
@@ -47,12 +50,12 @@ struct RawConfig {
 
 struct Project {
     verbose: bool,
-    syntax_theme: String,
     theme: theme::Theme,
     content_dir: PathBuf,
     output: PathBuf,
     templates: Vec<(glob::Pattern, String)>,
     theme_constants: serde_json::map::Map<String, serde_json::Value>,
+    evaluator: Evaluator,
 }
 
 impl Project {
@@ -79,64 +82,8 @@ impl Project {
 
         let path_patterns = path_patterns.or(Err(()))?;
 
-        Ok(Project {
-               verbose: false,
-               syntax_theme: config
-                   .syntax_theme
-                   .unwrap_or_else(|| highlighter::DEFAULT_SYNTAX_THEME.to_owned()),
-               theme: theme,
-               content_dir: config
-                   .content_dir
-                   .unwrap_or_else(|| PathBuf::from("content")),
-               output: config.output.unwrap_or_else(|| PathBuf::from("build")),
-               templates: path_patterns,
-               theme_constants: config
-                   .theme_constants
-                   .unwrap_or_else(serde_json::map::Map::new),
-           })
-    }
-
-    fn build_file(&self, evaluator: &Evaluator, path: &Path) -> Result<(), ()> {
-        let node = match evaluator.parser.borrow_mut().parse(path) {
-            Ok(n) => n,
-            Err(_) => {
-                error!("Failed to parse {}", path.to_string_lossy());
-                return Err(());
-            }
-        };
-
-        let output = evaluator.evaluate(&node);
-
-        // Find the template that matches this path
-        let template_name = self.templates
-            .iter()
-            .find(|&&(ref pat, _)| pat.matches_path(path))
-            .map(|&(_, ref name)| name.as_ref())
-            .unwrap_or("default");
-
-        let rendered = self.theme
-            .render(template_name,
-                    &output,
-                    &self.theme_constants,
-                    &evaluator.theme_config.borrow())
-            .or(Err(()))?;
-
-        let path_from_content_root = path.strip_prefix(&self.content_dir)
-            .expect("Failed to get output path");
-        let mut output_path = self.output.join(path_from_content_root);
-        output_path.set_extension("html");
-        let output_dir = output_path.parent().expect("Couldn't get output directory");
-
-        fs::create_dir_all(output_dir).or(Err(()))?;
-        let mut file = File::create(&output_path).or(Err(()))?;
-        file.write_all(rendered.as_bytes()).or(Err(()))?;
-
-        evaluator.reset();
-        Ok(())
-    }
-
-    fn build_project(&self) {
-        let mut evaluator = Evaluator::new_with_options(&self.syntax_theme);
+        let syntax_theme = config.syntax_theme.unwrap_or_else(|| highlighter::DEFAULT_SYNTAX_THEME.to_owned());
+        let mut evaluator = Evaluator::new_with_options(&syntax_theme);
         evaluator.register("md", Box::new(directives::Markdown::new()));
         evaluator.register("table", Box::new(directives::Dummy::new()));
         evaluator.register("version", Box::new(directives::Version::new("3.4.0")));
@@ -157,14 +104,94 @@ impl Project {
         evaluator.register("get", Box::new(directives::Get::new()));
         evaluator.register("theme-config", Box::new(directives::ThemeConfig::new()));
 
-        util::visit_dirs(self.content_dir.as_ref(),
-                         &|path| match self.build_file(&evaluator, path) {
-                             Ok(_) => (),
-                             Err(_) => {
-                                 error!("Failed to build {}", path.to_string_lossy());
-                             }
-                         })
-                .expect("Error crawling content tree");
+        Ok(Project {
+               verbose: false,
+               theme: theme,
+               content_dir: config
+                   .content_dir
+                   .unwrap_or_else(|| PathBuf::from("content")),
+               output: config.output.unwrap_or_else(|| PathBuf::from("build")),
+               templates: path_patterns,
+               theme_constants: config
+                   .theme_constants
+                   .unwrap_or_else(serde_json::map::Map::new),
+               evaluator: evaluator,
+           })
+    }
+
+    fn build_file(&self, evaluator: &Evaluator, path: &Path) -> Result<Page, ()> {
+        let node = match evaluator.parser.borrow_mut().parse(path) {
+            Ok(n) => n,
+            Err(_) => {
+                error!("Failed to parse {}", path.to_string_lossy());
+                return Err(());
+            }
+        };
+
+        let output = evaluator.evaluate(&node);
+        let slug = path.strip_prefix(&self.content_dir).expect("Failed to get output path");
+        let slug = slug.file_stem().unwrap().to_string_lossy();
+
+        let page = Page {
+            source_path: path.to_owned(),
+            slug: slug.into_owned(),
+            body: output,
+            theme_config: evaluator.theme_config.borrow().clone(),
+        };
+
+        evaluator.reset();
+        Ok(page)
+    }
+
+    fn link_file(&self, page: &Page) -> Result<(), ()> {
+        // Find the template that matches this path
+        let template_name = self.templates
+            .iter()
+            .find(|&&(ref pat, _)| pat.matches_path(&page.source_path))
+            .map(|&(_, ref name)| name.as_ref())
+            .unwrap_or("default");
+
+        let rendered = self.theme
+            .render(template_name,
+                    &self.theme_constants,
+                    &page,
+                    &self.evaluator.toctree.borrow())
+            .or(Err(()))?;
+
+        let mut output_path = self.output.join(&page.slug);
+        output_path.set_extension("html");
+        let output_dir = output_path.parent().expect("Couldn't get output directory");
+
+        fs::create_dir_all(output_dir).or(Err(()))?;
+        let mut file = File::create(&output_path).or(Err(()))?;
+        file.write_all(rendered.as_bytes()).or(Err(()))?;
+
+        Ok(())
+    }
+
+    fn build_project(&self) {
+        let mut pending_pages = vec![];
+
+        for entry in walkdir::WalkDir::new(&self.content_dir) {
+            let entry = entry.expect("Failed to walk dir");
+            if !entry.file_type().is_file() { continue; }
+
+            let path = entry.path();
+            match self.build_file(&self.evaluator, path) {
+                 Ok(page) => {
+                    pending_pages.push(page);
+                 },
+                 Err(_) => {
+                     error!("Failed to build {}", path.to_string_lossy());
+                 }
+             }
+        }
+
+        self.evaluator.toctree.borrow_mut().finish().expect("Failed to generate toctree");
+
+        for page in &pending_pages {
+            self.link_file(&page).expect("Failed to link page");
+        }
     }
 }
 

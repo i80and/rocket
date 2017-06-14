@@ -8,6 +8,7 @@ use directives;
 use highlighter::{self, SyntaxHighlighter};
 use markdown;
 use parse::{Parser, Node, NodeValue};
+use toctree::TocTree;
 
 pub struct Evaluator {
     directives: HashMap<String, Box<directives::DirectiveHandler>>,
@@ -18,6 +19,7 @@ pub struct Evaluator {
     pub variable_stack: RefCell<Vec<(String, String)>>,
     pub ctx: RefCell<HashMap<String, NodeValue>>,
     pub theme_config: RefCell<serde_json::map::Map<String, serde_json::Value>>,
+    pub toctree: RefCell<TocTree>,
 }
 
 impl Evaluator {
@@ -35,6 +37,7 @@ impl Evaluator {
             variable_stack: RefCell::new(vec![]),
             ctx: RefCell::new(HashMap::new()),
             theme_config: RefCell::new(serde_json::map::Map::new()),
+            toctree: RefCell::new(TocTree::new()),
         }
     }
 
