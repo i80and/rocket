@@ -226,6 +226,23 @@ impl DirectiveHandler for Include {
     }
 }
 
+pub struct Import;
+
+impl Import {
+    pub fn new() -> Import {
+        Import
+    }
+}
+
+impl DirectiveHandler for Import {
+    fn handle(&self, evaluator: &Evaluator, args: &[Node]) -> Result<String, ()> {
+        let include = Include::new();
+        include.handle(evaluator, args)?;
+
+        Ok("".to_owned())
+    }
+}
+
 pub struct Let;
 
 impl Let {

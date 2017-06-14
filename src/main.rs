@@ -150,6 +150,7 @@ impl Project {
                            Box::new(directives::DefinitionList::new()));
         evaluator.register("concat", Box::new(directives::Concat::new()));
         evaluator.register("include", Box::new(directives::Include::new()));
+        evaluator.register("import", Box::new(directives::Import::new()));
         evaluator.register("null", Box::new(directives::Dummy::new()));
         evaluator.register("let", Box::new(directives::Let::new()));
         evaluator.register("define", Box::new(directives::Define::new()));

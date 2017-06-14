@@ -88,6 +88,14 @@ Sets a set of variables for use in child expressions.
 (:include <expr-path>)
 ```
 
+### Include
+
+Imports the given file's definitions, but returns an empty string.
+
+```
+(:import <expr-path>)
+```
+
 ### Admonitions
 
 #### Note
