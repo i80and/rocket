@@ -76,7 +76,7 @@ impl DirectiveHandler for Admonition {
             _ => return Err(()),
         };
 
-        let body = evaluator.markdown.render(&raw_body, &evaluator.highlighter);
+        let (body, _) = evaluator.markdown.render(&raw_body, &evaluator.highlighter);
         Ok(format!("<div class=\"admonition admonition-{}\"><span class=\"admonition-title admonition-title-{}\">{}</span>{}</div>\n",
                    self.class,
                    self.class,
@@ -115,11 +115,14 @@ impl DirectiveHandler for Markdown {
             .map(|node| evaluator.evaluate(node))
             .fold(String::new(), |r, c| r + &c);
 
-        let rendered = evaluator
-            .markdown
-            .render(&body, &evaluator.highlighter)
-            .trim()
-            .to_owned();
+        let (rendered, title) = evaluator.markdown.render(&body, &evaluator.highlighter);
+
+        let mut theme_config = evaluator.theme_config.borrow_mut();
+        if !theme_config.contains_key("title") {
+            theme_config.insert("title".to_owned(), serde_json::Value::String(title));
+        }
+
+        let rendered = rendered.trim().to_owned();
         Ok(rendered)
     }
 }
@@ -175,7 +178,7 @@ impl DirectiveHandler for DefinitionList {
                          }
 
                          let term = evaluator.evaluate(&children[0]);
-                         let definition =
+                         let (definition, _) =
                              evaluator
                                  .markdown
                                  .render(&evaluator.evaluate(&children[1]),
@@ -396,7 +399,7 @@ impl DirectiveHandler for TocTree {
                         .toctree
                         .borrow_mut()
                         .add(current_slug.to_owned(), slug.to_owned(), None);
-                },
+                }
                 NodeValue::Children(ref children) => {
                     if children.len() != 2 {
                         return Err(());

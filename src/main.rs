@@ -177,8 +177,7 @@ impl Project {
             .map(|&(_, ref name)| name.as_ref())
             .unwrap_or("default");
 
-        let rendered = renderer
-            .render(template_name, &self.theme_constants, page)?;
+        let rendered = renderer.render(template_name, &self.theme_constants, page)?;
 
         let mut output_path = self.output.join(&page.slug);
         output_path.set_extension("html");

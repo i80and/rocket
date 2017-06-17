@@ -63,13 +63,16 @@ pub struct Renderer<'a> {
 }
 
 impl<'a> Renderer<'a> {
-    pub fn new(theme: &'a Theme, toctree: TocTree) -> Result<Renderer<'a>, handlebars::TemplateFileError> {
+    pub fn new(theme: &'a Theme,
+               toctree: TocTree)
+               -> Result<Renderer<'a>, handlebars::TemplateFileError> {
         let mut handlebars = Handlebars::new();
         let theme_dir_path = theme.path.parent().unwrap_or_else(|| Path::new(""));
 
         for (template_name, template_path) in &theme.templates {
             let template_path = theme_dir_path.join(template_path);
-            handlebars.register_template_file(template_name, template_path)?;
+            handlebars
+                .register_template_file(template_name, template_path)?;
         }
 
         handlebars.register_helper("toctree",

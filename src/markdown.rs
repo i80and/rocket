@@ -25,19 +25,22 @@ impl MarkdownRenderer {
         MarkdownRenderer { options: options }
     }
 
-    pub fn render(&self, markdown: &str, highlighter: &SyntaxHighlighter) -> String {
+    pub fn render(&self, markdown: &str, highlighter: &SyntaxHighlighter) -> (String, String) {
         let arena = Arena::new();
         let root = comrak::parse_document(&arena, markdown, &self.options);
         let mut formatter = HtmlFormatter::new(self, highlighter);
         formatter.format(root, false);
         formatter.flush();
-        formatter.s
+        (formatter.s, formatter.title)
     }
 }
 
-// Largely purloined  from comrak. See COPYING for details.
+// Largely purloined from comrak. See COPYING for details.
 
 struct HtmlFormatter<'o> {
+    in_title: bool,
+    title: String,
+
     s: String,
     last_level: u32,
     options: &'o comrak::ComrakOptions,
@@ -47,6 +50,9 @@ struct HtmlFormatter<'o> {
 impl<'o> HtmlFormatter<'o> {
     fn new(renderer: &'o MarkdownRenderer, highlighter: &'o SyntaxHighlighter) -> Self {
         HtmlFormatter {
+            in_title: false,
+            title: String::with_capacity(20),
+
             s: String::with_capacity(1024),
             last_level: 0,
             options: &renderer.options,
@@ -57,7 +63,7 @@ impl<'o> HtmlFormatter<'o> {
     fn cr(&mut self) {
         let l = self.s.len();
         if l > 0 && self.s.as_bytes()[l - 1] != b'\n' {
-            self.s += "\n";
+            self.append_html("\n");
         }
     }
 
@@ -83,7 +89,7 @@ impl<'o> HtmlFormatter<'o> {
             }
 
             if i > org {
-                self.s += &buffer[org..i];
+                self.append_html(&buffer[org..i]);
             }
 
             if i >= size {
@@ -91,10 +97,10 @@ impl<'o> HtmlFormatter<'o> {
             }
 
             match src[i] as char {
-                '"' => self.s += "&quot;",
-                '&' => self.s += "&amp;",
-                '<' => self.s += "&lt;",
-                '>' => self.s += "&gt;",
+                '"' => self.append_html("&quot;"),
+                '&' => self.append_html("&amp;"),
+                '<' => self.append_html("&lt;"),
+                '>' => self.append_html("&gt;"),
                 _ => unreachable!(),
             }
 
@@ -171,34 +177,34 @@ impl<'o> HtmlFormatter<'o> {
             NodeValue::BlockQuote => {
                 if entering {
                     self.cr();
-                    self.s += "<blockquote>\n";
+                    self.append_html("<blockquote>\n");
                 } else {
                     self.cr();
-                    self.s += "</blockquote>\n";
+                    self.append_html("</blockquote>\n");
                 }
             }
             NodeValue::List(ref nl) => {
                 if entering {
                     self.cr();
                     if nl.list_type == ListType::Bullet {
-                        self.s += "<ul>\n";
+                        self.append_html("<ul>\n");
                     } else if nl.start == 1 {
-                        self.s += "<ol>\n";
+                        self.append_html("<ol>\n");
                     } else {
                         self.s += &format!("<ol start=\"{}\">\n", nl.start);
                     }
                 } else if nl.list_type == ListType::Bullet {
-                    self.s += "</ul>\n";
+                    self.append_html("</ul>\n");
                 } else {
-                    self.s += "</ol>\n";
+                    self.append_html("</ol>\n");
                 }
             }
             NodeValue::Item(..) => {
                 if entering {
                     self.cr();
-                    self.s += "<li>";
+                    self.append_html("<li>");
                 } else {
-                    self.s += "</li>\n";
+                    self.append_html("</li>\n");
                 }
             }
             NodeValue::Heading(ref nch) => {
@@ -212,9 +218,17 @@ impl<'o> HtmlFormatter<'o> {
 
                 if entering {
                     self.cr();
-                    self.s += &format!("{}<section><h{}>", prefix, nch.level);
+                    self.append_html(&format!("{}<section><h{}>", prefix, nch.level));
+
+                    if nch.level == 1 {
+                        self.in_title = true;
+                    }
                 } else {
-                    self.s += &format!("</h{}>\n", nch.level);
+                    if nch.level == 1 {
+                        self.in_title = false;
+                    }
+
+                    self.append_html(&format!("</h{}>\n", nch.level));
                 }
             }
             NodeValue::CodeBlock(ref ncb) => {
@@ -222,7 +236,7 @@ impl<'o> HtmlFormatter<'o> {
                     self.cr();
 
                     if ncb.info.is_empty() {
-                        self.s += "<pre><code>";
+                        self.append_html("<pre><code>");
                         self.escape(&ncb.literal);
                     } else {
                         let mut first_tag = 0;
@@ -231,9 +245,9 @@ impl<'o> HtmlFormatter<'o> {
                             first_tag += 1;
                         }
 
-                        self.s += "<pre lang=\"";
+                        self.append_html("<pre lang=\"");
                         self.escape(&ncb.info[..first_tag]);
-                        self.s += "\"><code>";
+                        self.append_html("\"><code>");
 
                         match self.highlighter
                                   .highlight(&ncb.info[..first_tag], &ncb.literal) {
@@ -246,7 +260,7 @@ impl<'o> HtmlFormatter<'o> {
                         }
                     }
 
-                    self.s += "</code></pre>\n";
+                    self.append_html("</code></pre>\n");
                 }
             }
             NodeValue::HtmlBlock(ref nhb) => {
@@ -259,7 +273,7 @@ impl<'o> HtmlFormatter<'o> {
             NodeValue::ThematicBreak => {
                 if entering {
                     self.cr();
-                    self.s += "<hr />\n";
+                    self.append_html("<hr />\n");
                 }
             }
             NodeValue::Paragraph => {
@@ -273,10 +287,10 @@ impl<'o> HtmlFormatter<'o> {
                 if entering {
                     if !tight {
                         self.cr();
-                        self.s += "<p>";
+                        self.append_html("<p>");
                     }
                 } else if !tight {
-                    self.s += "</p>\n";
+                    self.append_html("</p>\n");
                 }
             }
             NodeValue::Text(ref literal) => {
@@ -286,114 +300,114 @@ impl<'o> HtmlFormatter<'o> {
             }
             NodeValue::LineBreak => {
                 if entering {
-                    self.s += "<br />\n";
+                    self.append_html("<br />\n");
                 }
             }
             NodeValue::SoftBreak => {
                 if entering {
                     if self.options.hardbreaks {
-                        self.s += "<br />\n";
+                        self.append_html("<br />\n");
                     } else {
-                        self.s += "\n";
+                        self.append_html("\n");
                     }
                 }
             }
             NodeValue::Code(ref literal) => {
                 if entering {
-                    self.s += "<code>";
+                    self.append_html("<code>");
                     self.escape(literal);
-                    self.s += "</code>";
+                    self.append_html("</code>");
                 }
             }
             NodeValue::HtmlInline(ref literal) => {
                 if entering {
-                    self.s += literal;
+                    self.append_html(literal);
                 }
             }
             NodeValue::Strong => {
                 if entering {
-                    self.s += "<strong>";
+                    self.append_html("<strong>");
                 } else {
-                    self.s += "</strong>";
+                    self.append_html("</strong>");
                 }
             }
             NodeValue::Emph => {
                 if entering {
-                    self.s += "<em>";
+                    self.append_html("<em>");
                 } else {
-                    self.s += "</em>";
+                    self.append_html("</em>");
                 }
             }
             NodeValue::Strikethrough => {
                 if entering {
-                    self.s += "<del>";
+                    self.append_html("<del>");
                 } else {
-                    self.s += "</del>";
+                    self.append_html("</del>");
                 }
             }
             NodeValue::Superscript => {
                 if entering {
-                    self.s += "<sup>";
+                    self.append_html("<sup>");
                 } else {
-                    self.s += "</sup>";
+                    self.append_html("</sup>");
                 }
             }
             NodeValue::Link(ref nl) => {
                 if entering {
-                    self.s += "<a href=\"";
+                    self.append_html("<a href=\"");
                     self.escape_href(&nl.url);
                     if !nl.title.is_empty() {
-                        self.s += "\" title=\"";
+                        self.append_html("\" title=\"");
                         self.escape(&nl.title);
                     }
-                    self.s += "\">";
+                    self.append_html("\">");
                 } else {
-                    self.s += "</a>";
+                    self.append_html("</a>");
                 }
             }
             NodeValue::Image(ref nl) => {
                 if entering {
-                    self.s += "<img src=\"";
+                    self.append_html("<img src=\"");
                     self.escape_href(&nl.url);
-                    self.s += "\" alt=\"";
+                    self.append_html("\" alt=\"");
                     return true;
                 } else {
                     if !nl.title.is_empty() {
-                        self.s += "\" title=\"";
+                        self.append_html("\" title=\"");
                         self.escape(&nl.title);
                     }
-                    self.s += "\" />";
+                    self.append_html("\" />");
                 }
             }
             NodeValue::Table(..) => {
                 if entering {
                     self.cr();
-                    self.s += "<table>\n";
+                    self.append_html("<table>\n");
                 } else {
                     if !node.last_child()
                             .unwrap()
                             .same_node(node.first_child().unwrap()) {
-                        self.s += "</tbody>";
+                        self.append_html("</tbody>");
                     }
-                    self.s += "</table>\n";
+                    self.append_html("</table>\n");
                 }
             }
             NodeValue::TableRow(header) => {
                 if entering {
                     self.cr();
                     if header {
-                        self.s += "<thead>";
+                        self.append_html("<thead>");
                         self.cr();
                     }
-                    self.s += "<tr>";
+                    self.append_html("<tr>");
                 } else {
                     self.cr();
-                    self.s += "</tr>";
+                    self.append_html("</tr>");
                     if header {
                         self.cr();
-                        self.s += "</thead>";
+                        self.append_html("</thead>");
                         self.cr();
-                        self.s += "<tbody>";
+                        self.append_html("<tbody>");
                     }
                 }
             }
@@ -413,9 +427,9 @@ impl<'o> HtmlFormatter<'o> {
                 if entering {
                     self.cr();
                     if in_header {
-                        self.s += "<th";
+                        self.append_html("<th");
                     } else {
-                        self.s += "<td";
+                        self.append_html("<td");
                     }
 
                     let mut start = node.parent().unwrap().first_child().unwrap();
@@ -426,25 +440,35 @@ impl<'o> HtmlFormatter<'o> {
                     }
 
                     match alignments[i] {
-                        TableAlignment::Left => self.s += " align=\"left\"",
-                        TableAlignment::Right => self.s += " align=\"right\"",
-                        TableAlignment::Center => self.s += " align=\"center\"",
+                        TableAlignment::Left => self.append_html(" align=\"left\""),
+                        TableAlignment::Right => self.append_html(" align=\"right\""),
+                        TableAlignment::Center => self.append_html(" align=\"center\""),
                         TableAlignment::None => (),
                     }
 
-                    self.s += ">";
+                    self.append_html(">");
                 } else if in_header {
-                    self.s += "</th>";
+                    self.append_html("</th>");
                 } else {
-                    self.s += "</td>";
+                    self.append_html("</td>");
                 }
             }
         }
         false
     }
 
+    /// Append text that should not appear in a plain text context.
+    fn append_html(&mut self, text: &str) {
+        if self.in_title {
+            self.title += text;
+        }
+
+        self.s += text;
+    }
+
     fn flush(&mut self) {
-        self.s += &"</section>".repeat(self.last_level as usize);
+        let ending_tags = "</section>".repeat(self.last_level as usize);
+        self.append_html(&ending_tags);
         self.last_level = 0;
     }
 }

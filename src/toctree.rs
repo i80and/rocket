@@ -47,7 +47,11 @@ impl TocTree {
     pub fn generate_html(&self, slug: &str) -> Result<Vec<Cow<'static, str>>, String> {
         let root = match self.children.get(slug) {
             Some(root) => root,
-            None => return { Ok(vec![Cow::Borrowed("")]) }
+            None => {
+                return {
+                           Ok(vec![Cow::Borrowed("")])
+                       }
+            }
         };
 
         let mut result = vec![];
@@ -71,7 +75,11 @@ impl TocTree {
 
             let title = match child.title.as_ref() {
                 Some(t) => t,
-                None => self.titles.get(&child.slug).ok_or(format!("Failed to find toctree entry '{}'", &child.slug))?,
+                None => {
+                    self.titles
+                        .get(&child.slug)
+                        .ok_or(format!("Failed to find toctree entry '{}'", &child.slug))?
+                }
             };
 
             result.push(Cow::Owned(format!(r#"<a href="{}{}">{}</a>"#,
