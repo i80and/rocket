@@ -377,6 +377,46 @@ impl DirectiveHandler for ThemeConfig {
     }
 }
 
+pub struct TocTree;
+
+impl TocTree {
+    pub fn new() -> TocTree {
+        TocTree
+    }
+}
+
+impl DirectiveHandler for TocTree {
+    fn handle(&self, evaluator: &Evaluator, args: &[Node]) -> Result<String, ()> {
+        let current_slug = evaluator.get_slug();
+
+        for arg in args {
+            match arg.value {
+                NodeValue::Owned(ref slug) => {
+                    evaluator
+                        .toctree
+                        .borrow_mut()
+                        .add(current_slug.to_owned(), slug.to_owned(), None);
+                },
+                NodeValue::Children(ref children) => {
+                    if children.len() != 2 {
+                        return Err(());
+                    }
+
+                    let title = evaluator.evaluate(&children[0]);
+                    let slug = evaluator.evaluate(&children[1]);
+
+                    evaluator
+                        .toctree
+                        .borrow_mut()
+                        .add(current_slug.to_owned(), slug, Some(title));
+                }
+            }
+        }
+
+        Ok(String::new())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

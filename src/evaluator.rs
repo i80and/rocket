@@ -12,6 +12,8 @@ use toctree::TocTree;
 
 pub struct Evaluator {
     directives: HashMap<String, Box<directives::DirectiveHandler>>,
+    current_slug: Option<String>,
+
     pub parser: RefCell<Parser>,
     pub markdown: markdown::MarkdownRenderer,
     pub highlighter: SyntaxHighlighter,
@@ -31,6 +33,7 @@ impl Evaluator {
     pub fn new_with_options(syntax_theme: &str) -> Self {
         Evaluator {
             directives: HashMap::new(),
+            current_slug: None,
             parser: RefCell::new(Parser::new()),
             markdown: markdown::MarkdownRenderer::new(),
             highlighter: SyntaxHighlighter::new(syntax_theme),
@@ -89,6 +92,14 @@ impl Evaluator {
         self.ctx.borrow_mut().clear();
         self.theme_config.borrow_mut().clear();
         self.variable_stack.borrow_mut().clear();
+    }
+
+    pub fn set_slug(&mut self, slug: &str) {
+        self.current_slug = Some(slug.to_owned());
+    }
+
+    pub fn get_slug(&self) -> &str {
+        return self.current_slug.as_ref().expect("Requested slug before set")
     }
 
     fn lookup(&self, node: &Node, key: &str, args: &[Node]) -> Result<String, ()> {
