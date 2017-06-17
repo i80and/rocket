@@ -6,8 +6,13 @@ use std::sync::Arc;
 use page::Page;
 use toctree::TocTree;
 use handlebars::{self, Handlebars};
+use regex::Regex;
 use serde_json;
 use toml;
+
+lazy_static! {
+    static ref PAT_TAGS: Regex = Regex::new("<[^>]+>").expect("Failed to compile striptags regex");
+}
 
 struct TocTreeHelper {
     toctree: Arc<TocTree>,
@@ -25,6 +30,21 @@ impl handlebars::HelperDef for TocTreeHelper {
             .or_else(|msg| Err(handlebars::RenderError::new(msg)))?
             .concat();
         rc.writer.write_all(html.as_bytes())?;
+        Ok(())
+    }
+}
+
+struct StripTags;
+
+impl handlebars::HelperDef for StripTags {
+    fn call(&self,
+            h: &handlebars::Helper,
+            _: &Handlebars,
+            rc: &mut handlebars::RenderContext)
+            -> Result<(), handlebars::RenderError> {
+        let arg = h.param(0).unwrap().value().as_str().unwrap();
+        let stripped = PAT_TAGS.replace_all(arg, "");
+        rc.writer.write_all(stripped.as_bytes())?;
         Ok(())
     }
 }
@@ -77,6 +97,8 @@ impl<'a> Renderer<'a> {
 
         handlebars.register_helper("toctree",
                                    Box::new(TocTreeHelper { toctree: Arc::new(toctree) }));
+
+        handlebars.register_helper("striptags", Box::new(StripTags));
 
         Ok(Renderer {
                handlebars,
