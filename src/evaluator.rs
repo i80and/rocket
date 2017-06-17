@@ -99,9 +99,9 @@ impl Evaluator {
     }
 
     pub fn get_slug(&self) -> &str {
-        return self.current_slug
-                   .as_ref()
-                   .expect("Requested slug before set");
+        self.current_slug
+            .as_ref()
+            .expect("Requested slug before set")
     }
 
     fn lookup(&self, node: &Node, key: &str, args: &[Node]) -> Result<String, ()> {

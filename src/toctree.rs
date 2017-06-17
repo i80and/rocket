@@ -78,7 +78,7 @@ impl TocTree {
                 None => {
                     self.titles
                         .get(&child.slug)
-                        .ok_or(format!("Failed to find toctree entry '{}'", &child.slug))?
+                        .ok_or_else(|| format!("Failed to find toctree entry '{}'", &child.slug))?
                 }
             };
 
