@@ -203,9 +203,12 @@ impl Project {
             let path = entry.path();
             let slug = path.strip_prefix(&self.content_dir)
                 .expect("Failed to get output path");
-            let slug = slug.file_stem().unwrap().to_string_lossy();
-            self.evaluator.set_slug(&slug);
-            match self.build_file(&self.evaluator, &slug, path) {
+            let dir = slug.parent().unwrap();
+            let slug = dir.join(slug.file_stem().unwrap());
+            let slug_str = slug.to_string_lossy();
+
+            self.evaluator.set_slug(&slug_str);
+            match self.build_file(&self.evaluator, &slug_str, path) {
                 Ok(page) => {
                     titles.insert(page.slug.to_owned(), page.title());
                     pending_pages.push(page);
