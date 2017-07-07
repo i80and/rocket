@@ -1,0 +1,8 @@
+theme = "theme/theme.toml"
+content_dir = "content"
+
+[theme_constants]
+  title = "Rocket Documentation"
+
+[templates]
+  "*" = "default"

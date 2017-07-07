@@ -1,0 +1,7 @@
+# Home
+
+Rocket is a fast, powerful, and homoiconic text markup format with tight integration with
+[Markdown](https://daringfireball.net/projects/markdown/).
+
+(:toctree
+  "reference")

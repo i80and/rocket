@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<title>{{project.title}}{{#if page.title}} - {{striptags page.title}}{{/if}}</title>
+<meta charset="utf-8">
+<style>
+nav {
+ position: fixed;
+ width: 250px;
+}
+
+nav ul {
+  padding-left: 0;
+}
+nav li {
+  list-style: none;
+  margin-left: 10px;
+}
+
+nav li.current {
+  font-variant: small-caps;
+}
+
+.body {
+  position: relative;
+  left: 250px;
+}
+
+section {
+  line-height: 150%;
+  max-width: 800px;
+}
+
+pre {
+  overflow-x: scroll;
+}
+
+.admonition {
+  margin-left: 10px;
+  margin-top: 5px;
+  margin-bottom: 5px;
+  padding: 10px;
+  border-left: 2px solid #6f4e37;
+}
+
+.admonition-warning {
+  border-left: 2px solid red;
+}
+
+.admonition-title {
+  font-variant: small-caps;
+}
+</style>
+</head>
+<body>
+<nav class="root-toc">
+{{toctree "index"}}
+</nav>
+<div class="body">
+{{{body}}}
+</div>
+</body>
+</html>
