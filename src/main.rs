@@ -180,6 +180,10 @@ impl Project {
         let rendered = renderer.render(template_name, &self.theme_constants, page)?;
 
         let mut output_path = self.output.join(&page.slug);
+        if page.slug != "index" {
+            output_path.push("index");
+        }
+
         output_path.set_extension("html");
         let output_dir = output_path.parent().expect("Couldn't get output directory");
 
