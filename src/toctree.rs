@@ -44,10 +44,10 @@ impl TocTree {
 
         self.inverse_children
             .entry(child)
-            .or_insert_with(|| vec![parent_slug.to_owned()]);
+            .or_insert_with(|| vec![]).push(parent_slug.to_owned());
         self.children
             .entry(parent_slug.to_owned())
-            .or_insert_with(|| vec![new_element]);
+            .or_insert_with(|| vec![]).push(new_element);
     }
 
     pub fn finish(&mut self, titles: HashMap<Slug, String>) {
