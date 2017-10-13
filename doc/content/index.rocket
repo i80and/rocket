@@ -4,4 +4,5 @@ Rocket is a fast, powerful, and homoiconic text markup format with tight integra
 [Markdown](https://daringfireball.net/projects/markdown/).
 
 (:toctree
-  "reference")
+  "reference"
+  "tutorials")
