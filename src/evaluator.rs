@@ -7,12 +7,13 @@ use serde_json;
 use directives;
 use highlighter::{self, SyntaxHighlighter};
 use markdown;
+use page::Slug;
 use parse::{Parser, Node, NodeValue};
 use toctree::TocTree;
 
 pub struct Evaluator {
     directives: HashMap<String, Box<directives::DirectiveHandler>>,
-    current_slug: Option<String>,
+    current_slug: Option<Slug>,
 
     pub parser: RefCell<Parser>,
     pub markdown: markdown::MarkdownRenderer,
@@ -40,7 +41,7 @@ impl Evaluator {
             variable_stack: RefCell::new(vec![]),
             ctx: RefCell::new(HashMap::new()),
             theme_config: RefCell::new(serde_json::map::Map::new()),
-            toctree: RefCell::new(TocTree::new()),
+            toctree: RefCell::new(TocTree::new(true)),
         }
     }
 
@@ -94,11 +95,11 @@ impl Evaluator {
         self.variable_stack.borrow_mut().clear();
     }
 
-    pub fn set_slug(&mut self, slug: &str) {
-        self.current_slug = Some(slug.to_owned());
+    pub fn set_slug(&mut self, slug: Slug) {
+        self.current_slug = Some(slug);
     }
 
-    pub fn get_slug(&self) -> &str {
+    pub fn get_slug(&self) -> &Slug {
         self.current_slug
             .as_ref()
             .expect("Requested slug before set")

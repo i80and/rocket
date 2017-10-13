@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use page::Page;
+use page::{Page, Slug};
 use toctree::TocTree;
 use handlebars::{self, Handlebars};
 use regex::Regex;
@@ -16,6 +16,7 @@ lazy_static! {
 
 struct TocTreeHelper {
     toctree: Arc<TocTree>,
+    current_slug: Slug,
 }
 
 impl handlebars::HelperDef for TocTreeHelper {
@@ -26,7 +27,7 @@ impl handlebars::HelperDef for TocTreeHelper {
             -> Result<(), handlebars::RenderError> {
         let slug = h.param(0).unwrap().value().as_str().unwrap();
         let html = self.toctree
-            .generate_html(slug)
+            .generate_html(&Slug::new(slug.to_owned()), &self.current_slug)
             .or_else(|msg| Err(handlebars::RenderError::new(msg)))?
             .concat();
         rc.writer.write_all(html.as_bytes())?;
@@ -78,6 +79,7 @@ impl Theme {
 }
 
 pub struct Renderer<'a> {
+    toctree: Arc<TocTree>,
     handlebars: Handlebars,
     constants: &'a serde_json::map::Map<String, serde_json::Value>,
 }
@@ -95,18 +97,16 @@ impl<'a> Renderer<'a> {
                 .register_template_file(template_name, template_path)?;
         }
 
-        handlebars.register_helper("toctree",
-                                   Box::new(TocTreeHelper { toctree: Arc::new(toctree) }));
-
         handlebars.register_helper("striptags", Box::new(StripTags));
 
         Ok(Renderer {
+               toctree: Arc::new(toctree),
                handlebars,
                constants: &theme.constants,
            })
     }
 
-    pub fn render(&self,
+    pub fn render(&mut self,
                   template_name: &str,
                   project_args: &serde_json::map::Map<String, serde_json::Value>,
                   page: &Page)
@@ -117,6 +117,12 @@ impl<'a> Renderer<'a> {
             "theme": self.constants,
             "body": &page.body,
         });
+
+        let helper = TocTreeHelper {
+            toctree: self.toctree.clone(),
+            current_slug: page.slug.to_owned(),
+        };
+        self.handlebars.register_helper("toctree", Box::new(helper));
 
         self.handlebars.render(template_name, &ctx)
     }

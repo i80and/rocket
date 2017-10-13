@@ -1,32 +1,38 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
+use page::Slug;
 
 #[derive(Debug)]
 struct TocTreeElement {
-    slug: String,
+    slug: Slug,
     title: Option<String>,
 }
 
 pub struct TocTree {
+    pub current_slug: Slug,
+
     /// Maps parent -> children
-    children: HashMap<String, Vec<TocTreeElement>>,
+    children: HashMap<Slug, Vec<TocTreeElement>>,
 
     /// Maps child -> parents
-    inverse_children: HashMap<String, Vec<String>>,
+    inverse_children: HashMap<Slug, Vec<Slug>>,
 
-    titles: HashMap<String, String>,
+    titles: HashMap<Slug, String>,
+    pretty_url: bool,
 }
 
 impl TocTree {
-    pub fn new() -> Self {
+    pub fn new(pretty_url: bool) -> Self {
         TocTree {
+            current_slug: Slug::new("".to_owned()),
             children: HashMap::new(),
             inverse_children: HashMap::new(),
             titles: HashMap::new(),
+            pretty_url: pretty_url,
         }
     }
 
-    pub fn add(&mut self, parent_slug: String, child: String, title: Option<String>) {
+    pub fn add(&mut self, parent_slug: &Slug, child: Slug, title: Option<String>) {
         let new_element = TocTreeElement {
             slug: child.to_owned(),
             title: title,
@@ -36,38 +42,29 @@ impl TocTree {
             .entry(child)
             .or_insert_with(|| vec![parent_slug.to_owned()]);
         self.children
-            .entry(parent_slug)
+            .entry(parent_slug.to_owned())
             .or_insert_with(|| vec![new_element]);
     }
 
-    pub fn finish(&mut self, titles: HashMap<String, String>) {
+    pub fn finish(&mut self, titles: HashMap<Slug, String>) {
         self.titles = titles;
     }
 
-    pub fn generate_html(&self, slug: &str) -> Result<Vec<Cow<'static, str>>, String> {
-        let root = match self.children.get(slug) {
-            Some(root) => root,
+    pub fn generate_html(&self, root: &Slug, current_slug: &Slug) -> Result<Vec<Cow<'static, str>>, String> {
+        let children = match self.children.get(root) {
+            Some(children) => children,
             None => {
-                return {
-                           Ok(vec![Cow::Borrowed("")])
-                       }
+                return Ok(vec![Cow::Borrowed("")]);
             }
         };
 
         let mut result = vec![];
 
-        let slug_depth = slug.matches('/').count();
-        let slug_depth = if !slug.ends_with("index") {
-            slug_depth + 1
-        } else {
-            slug_depth
-        };
-
-        let slug_prefix = "../".repeat(slug_depth);
+        let slug_prefix = "../".repeat(current_slug.depth(self.pretty_url));
         result.push(Cow::Borrowed("<ul>"));
 
-        for child in root {
-            if self.is_child_of(slug, &child.slug) {
+        for child in children {
+            if self.is_child_of(root, &child.slug) {
                 result.push(Cow::Borrowed(r#"<li class="current">"#));
             } else {
                 result.push(Cow::Borrowed("<li>"));
@@ -86,7 +83,7 @@ impl TocTree {
                                            slug_prefix,
                                            child.slug,
                                            title)));
-            result.extend(self.generate_html(&child.slug)?);
+            result.extend(self.generate_html(&child.slug, current_slug)?);
             result.push(Cow::Borrowed("</li>"));
         }
         result.push(Cow::Borrowed("</ul>"));
@@ -94,7 +91,7 @@ impl TocTree {
     }
 
     /// Return True if slug is a child/grand-child/... of ancestor.
-    fn is_child_of(&self, slug: &str, ancestor: &str) -> bool {
+    fn is_child_of(&self, slug: &Slug, ancestor: &Slug) -> bool {
         if slug == ancestor {
             return true;
         }

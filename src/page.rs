@@ -1,9 +1,48 @@
-use std::path::PathBuf;
+use std::fmt;
+use std::path::{Path, PathBuf};
 use serde_json::{self, Value};
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Slug {
+    slug: String,
+}
+
+impl Slug {
+    pub fn new(slug: String) -> Slug {
+        Slug {
+            slug: slug,
+        }
+    }
+
+    pub fn create_output_path(&self, prefix: &Path, pretty_url: bool) -> PathBuf {
+        let mut output_path = prefix.join(&self.slug);
+        if pretty_url && self.slug != "index" {
+            output_path.push("index");
+        }
+        output_path.set_extension("html");
+        output_path
+    }
+
+    pub fn depth(&self, pretty_url: bool) -> usize {
+        let modifier = if pretty_url && self.slug != "index" {
+            1
+        } else {
+            0
+        };
+
+        self.slug.matches('/').count() + modifier
+    }
+}
+
+impl fmt::Display for Slug {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", &self.slug)
+    }
+}
 
 pub struct Page {
     pub source_path: PathBuf,
-    pub slug: String,
+    pub slug: Slug,
     pub body: String,
     pub theme_config: serde_json::map::Map<String, Value>,
 }

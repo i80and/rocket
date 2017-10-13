@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 use serde_json;
 use parse::{Node, NodeValue};
+use page::Slug;
 use evaluator::Evaluator;
 
 pub trait DirectiveHandler {
@@ -398,7 +399,7 @@ impl DirectiveHandler for TocTree {
                     evaluator
                         .toctree
                         .borrow_mut()
-                        .add(current_slug.to_owned(), slug.to_owned(), None);
+                        .add(current_slug, Slug::new(slug.to_owned()), None);
                 }
                 NodeValue::Children(ref children) => {
                     if children.len() != 2 {
@@ -411,7 +412,7 @@ impl DirectiveHandler for TocTree {
                     evaluator
                         .toctree
                         .borrow_mut()
-                        .add(current_slug.to_owned(), slug, Some(title));
+                        .add(current_slug, Slug::new(slug), Some(title));
                 }
             }
         }

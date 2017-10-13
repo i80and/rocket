@@ -38,7 +38,7 @@ use std::mem;
 use std::path::{Path, PathBuf};
 use argparse::{ArgumentParser, StoreTrue};
 use evaluator::Evaluator;
-use page::Page;
+use page::{Page, Slug};
 use toctree::TocTree;
 
 #[derive(Debug)]
@@ -77,6 +77,8 @@ struct Project {
     templates: Vec<(glob::Pattern, String)>,
     theme_constants: serde_json::map::Map<String, serde_json::Value>,
     evaluator: Evaluator,
+
+    pretty_url: bool,
 }
 
 impl Project {
@@ -140,10 +142,11 @@ impl Project {
                    .theme_constants
                    .unwrap_or_else(serde_json::map::Map::new),
                evaluator: evaluator,
+               pretty_url: true,
            })
     }
 
-    fn build_file(&self, evaluator: &Evaluator, slug: &str, path: &Path) -> Result<Page, ()> {
+    fn build_file(&self, evaluator: &Evaluator, slug: &Slug, path: &Path) -> Result<Page, ()> {
         debug!("Compiling {}", slug);
 
         let node = match evaluator.parser.borrow_mut().parse(path) {
@@ -158,7 +161,7 @@ impl Project {
 
         let page = Page {
             source_path: path.to_owned(),
-            slug: slug.to_owned(),
+            slug: slug.clone(),
             body: output,
             theme_config: evaluator.theme_config.borrow().clone(),
         };
@@ -167,7 +170,7 @@ impl Project {
         Ok(page)
     }
 
-    fn link_file(&self, page: &Page, renderer: &theme::Renderer) -> Result<(), LinkError> {
+    fn link_file(&self, page: &Page, renderer: &mut theme::Renderer) -> Result<(), LinkError> {
         debug!("Linking {}", &page.slug);
 
         // Find the template that matches this path
@@ -178,13 +181,7 @@ impl Project {
             .unwrap_or("default");
 
         let rendered = renderer.render(template_name, &self.theme_constants, page)?;
-
-        let mut output_path = self.output.join(&page.slug);
-        if page.slug != "index" {
-            output_path.push("index");
-        }
-
-        output_path.set_extension("html");
+        let output_path = page.slug.create_output_path(&self.output, self.pretty_url);
         let output_dir = output_path.parent().expect("Couldn't get output directory");
 
         fs::create_dir_all(output_dir)?;
@@ -208,11 +205,11 @@ impl Project {
             let slug = path.strip_prefix(&self.content_dir)
                 .expect("Failed to get output path");
             let dir = slug.parent().unwrap();
-            let slug = dir.join(slug.file_stem().unwrap());
-            let slug_str = slug.to_string_lossy();
+            let stem = slug.file_stem().unwrap();
+            let slug = Slug::new(dir.join(stem).to_string_lossy().as_ref().to_owned());
 
-            self.evaluator.set_slug(&slug_str);
-            match self.build_file(&self.evaluator, &slug_str, path) {
+            self.evaluator.set_slug(slug.clone());
+            match self.build_file(&self.evaluator, &slug, path) {
                 Ok(page) => {
                     titles.insert(page.slug.to_owned(), page.title());
                     pending_pages.push(page);
@@ -223,14 +220,14 @@ impl Project {
             }
         }
 
-        let mut toctree = mem::replace(&mut self.evaluator.toctree, RefCell::new(TocTree::new()))
+        let mut toctree = mem::replace(&mut self.evaluator.toctree, RefCell::new(TocTree::new(self.pretty_url)))
             .into_inner();
         toctree.finish(titles);
 
-        let renderer = theme::Renderer::new(&self.theme, toctree)
+        let mut renderer = theme::Renderer::new(&self.theme, toctree)
             .expect("Failed to construct renderer");
         for page in &pending_pages {
-            self.link_file(page, &renderer)
+            self.link_file(page, &mut renderer)
                 .expect("Failed to link page");
         }
     }
