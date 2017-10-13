@@ -27,7 +27,7 @@ impl handlebars::HelperDef for TocTreeHelper {
             -> Result<(), handlebars::RenderError> {
         let slug = h.param(0).unwrap().value().as_str().unwrap();
         let html = self.toctree
-            .generate_html(&Slug::new(slug.to_owned()), &self.current_slug)
+            .generate_html(&Slug::new(slug.to_owned()), &self.current_slug, true)
             .or_else(|msg| Err(handlebars::RenderError::new(msg)))?
             .concat();
         rc.writer.write_all(html.as_bytes())?;

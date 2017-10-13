@@ -9,7 +9,7 @@ struct TocTreeElement {
 }
 
 pub struct TocTree {
-    pub current_slug: Slug,
+    root: Slug,
 
     /// Maps parent -> children
     children: HashMap<Slug, Vec<TocTreeElement>>,
@@ -22,14 +22,18 @@ pub struct TocTree {
 }
 
 impl TocTree {
-    pub fn new(pretty_url: bool) -> Self {
+    pub fn new(root: Slug, pretty_url: bool) -> Self {
         TocTree {
-            current_slug: Slug::new("".to_owned()),
+            root: root,
             children: HashMap::new(),
             inverse_children: HashMap::new(),
             titles: HashMap::new(),
             pretty_url: pretty_url,
         }
+    }
+
+    pub fn new_empty() -> Self {
+        Self::new(Slug::new("".to_owned()), false)
     }
 
     pub fn add(&mut self, parent_slug: &Slug, child: Slug, title: Option<String>) {
@@ -50,7 +54,7 @@ impl TocTree {
         self.titles = titles;
     }
 
-    pub fn generate_html(&self, root: &Slug, current_slug: &Slug) -> Result<Vec<Cow<'static, str>>, String> {
+    pub fn generate_html(&self, root: &Slug, current_slug: &Slug, is_root: bool) -> Result<Vec<Cow<'static, str>>, String> {
         let children = match self.children.get(root) {
             Some(children) => children,
             None => {
@@ -62,6 +66,16 @@ impl TocTree {
 
         let slug_prefix = "../".repeat(current_slug.depth(self.pretty_url));
         result.push(Cow::Borrowed("<ul>"));
+
+        if is_root {
+            result.push(Cow::Borrowed(r#"<li class="current">"#));
+            let title = self.titles.get(&self.root).ok_or_else(|| format!("Failed to find toctree root '{}'", &self.root))?;
+            result.push(Cow::Owned(format!(r#"<a href="{}{}">{}</a>"#,
+                                           slug_prefix,
+                                           Slug::new("".to_owned()),
+                                           title)));
+            result.push(Cow::Borrowed("</li>"));
+        }
 
         for child in children {
             if self.is_child_of(root, &child.slug) {
@@ -83,10 +97,15 @@ impl TocTree {
                                            slug_prefix,
                                            child.slug,
                                            title)));
-            result.extend(self.generate_html(&child.slug, current_slug)?);
+            result.extend(self.generate_html(&child.slug, current_slug, false)?);
             result.push(Cow::Borrowed("</li>"));
         }
         result.push(Cow::Borrowed("</ul>"));
+
+        if is_root {
+            result.push(Cow::Borrowed("</ul>"));
+        }
+
         Ok(result)
     }
 

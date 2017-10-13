@@ -220,7 +220,7 @@ impl Project {
             }
         }
 
-        let mut toctree = mem::replace(&mut self.evaluator.toctree, RefCell::new(TocTree::new(self.pretty_url)))
+        let mut toctree = mem::replace(&mut self.evaluator.toctree, RefCell::new(TocTree::new_empty()))
             .into_inner();
         toctree.finish(titles);
 

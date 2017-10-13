@@ -41,7 +41,7 @@ impl Evaluator {
             variable_stack: RefCell::new(vec![]),
             ctx: RefCell::new(HashMap::new()),
             theme_config: RefCell::new(serde_json::map::Map::new()),
-            toctree: RefCell::new(TocTree::new(true)),
+            toctree: RefCell::new(TocTree::new(Slug::new("index".to_owned()), true)),
         }
     }
 
