@@ -78,7 +78,7 @@ impl TocTree {
         }
 
         for child in children {
-            if self.is_child_of(root, &child.slug) {
+            if self.is_ancestor_of(&child.slug, current_slug) {
                 result.push(Cow::Borrowed(r#"<li class="current">"#));
             } else {
                 result.push(Cow::Borrowed("<li>"));
@@ -109,17 +109,17 @@ impl TocTree {
         Ok(result)
     }
 
-    /// Return True if slug is a child/grand-child/... of ancestor.
-    fn is_child_of(&self, slug: &Slug, ancestor: &Slug) -> bool {
-        if slug == ancestor {
+    /// Return True if ancestor is a parent/grand-parent/... of child.
+    fn is_ancestor_of(&self, ancestor: &Slug, child: &Slug) -> bool {
+        if ancestor == child {
             return true;
         }
 
-        match self.inverse_children.get(slug) {
+        match self.inverse_children.get(child) {
             Some(parents) => {
                 parents
                     .iter()
-                    .any(|parent| self.is_child_of(parent, ancestor))
+                    .any(|parent| self.is_ancestor_of(ancestor, parent))
             }
             _ => false,
         }
