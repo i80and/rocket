@@ -1,0 +1,1 @@
+(:define-template wikipedia "[${0}](https://en.wikipedia.org/wiki/${1})" ".+" ".+")

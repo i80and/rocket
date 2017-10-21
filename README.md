@@ -74,12 +74,10 @@ Sets a set of variables for use in child expressions.
 (:get foo)
 ```
 
-### Link Templates
-
-#### Manual
+### Simple Templates
 
 ```
-(:manual [<expr-title>] <expr-path>)
+(:define-template <name> <pattern> [<regex>, [<regex>, ...]])
 ```
 
 ### Include

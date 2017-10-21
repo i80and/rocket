@@ -1,8 +1,23 @@
+use std::{cmp, slice, str, iter};
+use std::rc::Rc;
 use std::path::{Path, PathBuf};
+use regex::{Captures, Regex};
 use serde_json;
 use parse::{Node, NodeValue};
 use page::Slug;
 use evaluator::Evaluator;
+
+fn consume_string(iter: &mut slice::Iter<Node>, evaluator: &Evaluator) -> Option<String> {
+    match iter.next() {
+        Some(n) => {
+            match n.value {
+                NodeValue::Owned(ref s) => Some(s.to_owned()),
+                NodeValue::Children(_) => Some(evaluator.evaluate(n)),
+            }
+        },
+        None => return None,
+    }
+}
 
 pub trait DirectiveHandler {
     fn handle(&self, evaluator: &Evaluator, args: &[Node]) -> Result<String, ()>;
@@ -128,35 +143,100 @@ impl DirectiveHandler for Markdown {
     }
 }
 
-pub struct LinkTemplate {
-    prefix: String,
+pub struct Template {
+    template: String,
+    checkers: Vec<Regex>,
 }
 
-impl LinkTemplate {
-    pub fn new(prefix: &str) -> LinkTemplate {
-        LinkTemplate { prefix: prefix.to_owned() }
+impl Template {
+    pub fn new(template: String, checkers: Vec<Regex>) -> Self {
+        Template {
+            template,
+            checkers,
+        }
     }
 }
 
-impl DirectiveHandler for LinkTemplate {
+impl DirectiveHandler for Template {
     fn handle(&self, evaluator: &Evaluator, args: &[Node]) -> Result<String, ()> {
-        let mut title = None;
-        let suffix = match args.len() {
-            1 => evaluator.evaluate(&args[0]),
-            2 => {
-                title = Some(evaluator.evaluate(&args[0]));
-                evaluator.evaluate(&args[1])
+        let checkers = self.checkers.iter().map(|checker| Some(checker)).chain(iter::repeat(None));
+
+        let args: Result<Vec<String>, ()> = args.iter().map(|ref node| {
+            match node.value {
+                NodeValue::Owned(ref s) => s.to_owned(),
+                NodeValue::Children(_) => evaluator.evaluate(node),
             }
-            _ => return Err(()),
+        }).chain(iter::repeat("".to_owned())).zip(checkers).map(|(arg, checker)| {
+            match checker {
+                Some(checker) => {
+                    if checker.is_match(&arg) {
+                        Ok(arg)
+                    } else {
+                        Err(())
+                    }
+                },
+                _ => Ok(arg)
+            }
+        }).take(cmp::max(args.len(), self.checkers.len())).collect();
+
+        let args = match args {
+            Ok(args) => args,
+            Err(_) => return Err(()),
         };
 
-        let url = self.prefix.clone() + &suffix;
-        let title = match title {
-            Some(t) => t,
-            None => url.clone(),
+        lazy_static! {
+            static ref RE: Regex = Regex::new(r#"\$\{(\d)\}"#).unwrap();
+        }
+
+        let result = RE.replace_all(&self.template, |captures: &Captures| {
+            let n = str::parse::<usize>(&captures[1]).expect("Failed to parse template number");
+            match args.get(n) {
+                Some(s) => s.to_owned(),
+                None => "".to_owned(),
+            }
+        });
+
+        Ok(result.into_owned())
+    }
+}
+
+pub struct DefineTemplate;
+
+impl DefineTemplate {
+    pub fn new() -> Self {
+        DefineTemplate
+    }
+}
+
+impl DirectiveHandler for DefineTemplate {
+    fn handle(&self, evaluator: &Evaluator, args: &[Node]) -> Result<String, ()> {
+        let mut iter = args.iter();
+        let name = match consume_string(&mut iter, evaluator) {
+            Some(s) => s,
+            None => return Err(()),
         };
 
-        Ok(format!(r#"<a href="{}">{}</a>"#, url, title))
+        let template_text = match consume_string(&mut iter, evaluator) {
+            Some(s) => s,
+            None => return Err(()),
+        };
+
+        let checkers: Result<Vec<Regex>, ()> = iter.map(|ref node| {
+            let pattern_string = match node.value {
+                NodeValue::Owned(ref s) => s.to_owned(),
+                NodeValue::Children(_) => evaluator.evaluate(node),
+            };
+
+            Regex::new(&pattern_string).or(Err(()))
+        }).collect();
+
+        let checkers = match checkers {
+            Ok(c) => c,
+            Err(_) => return Err(()),
+        };
+
+        evaluator.register(name, Rc::new(Template::new(template_text, checkers)));
+        Ok("".to_owned())
     }
 }
 
@@ -440,7 +520,7 @@ mod tests {
 
     #[test]
     fn test_version() {
-        let mut evaluator = Evaluator::new();
+        let evaluator = Evaluator::new();
         evaluator.register("concat", Box::new(Concat::new()));
         let handler = Version::new("3.4.0");
 
@@ -472,7 +552,7 @@ mod tests {
 
     #[test]
     fn test_concat() {
-        let mut evaluator = Evaluator::new();
+        let evaluator = Evaluator::new();
         evaluator.register("version", Box::new(Version::new("3.4")));
         let handler = Concat::new();
 
@@ -502,20 +582,25 @@ mod tests {
     }
 
     #[test]
-    fn test_link_template() {
+    fn test_template() {
         let evaluator = Evaluator::new();
-        let handler = LinkTemplate::new("https://foxquill.com");
+        let handler = Template::new(
+            r#"[${0}](https://foxquill.com${1} "${2}")"#.to_owned(),
+            vec![
+                Regex::new("^.+$").unwrap(),
+                Regex::new("^/.*$").unwrap(),
+            ]);
 
         assert!(handler.handle(&evaluator, &[]).is_err());
-        assert_eq!(handler.handle(&evaluator, &[Node::new_string("/simd-rectangle-intersection/")]),
-                   Ok(r#"<a href="https://foxquill.com/simd-rectangle-intersection/">https://foxquill.com/simd-rectangle-intersection/</a>"#.to_owned()));
-        assert_eq!(handler.handle(&evaluator, &[Node::new_string("SIMD.js Rectangle Intersection"), Node::new_string("/simd-rectangle-intersection/")]),
-                   Ok(r#"<a href="https://foxquill.com/simd-rectangle-intersection/">SIMD.js Rectangle Intersection</a>"#.to_owned()));
+        assert_eq!(handler.handle(&evaluator, &[
+            Node::new_string("SIMD.js Rectangle Intersection"),
+            Node::new_string("/simd-rectangle-intersection/")]),
+                   Ok(r#"[SIMD.js Rectangle Intersection](https://foxquill.com/simd-rectangle-intersection/ "")"#.to_owned()));
     }
 
     #[test]
     fn test_let() {
-        let mut evaluator = Evaluator::new();
+        let evaluator = Evaluator::new();
         let handler = Let::new();
 
         evaluator.register("concat", Box::new(Concat::new()));
@@ -537,7 +622,7 @@ mod tests {
 
     #[test]
     fn test_define() {
-        let mut evaluator = Evaluator::new();
+        let evaluator = Evaluator::new();
         evaluator.register("concat", Box::new(Concat::new()));
         let handler = Define::new();
 
@@ -558,7 +643,7 @@ mod tests {
 
     #[test]
     fn test_get() {
-        let mut evaluator = Evaluator::new();
+        let evaluator = Evaluator::new();
         evaluator.register("concat", Box::new(Concat::new()));
         let handler = Get::new();
 

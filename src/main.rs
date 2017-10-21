@@ -31,6 +31,7 @@ mod toctree;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::convert::From;
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
@@ -108,27 +109,26 @@ impl Project {
         let syntax_theme = config
             .syntax_theme
             .unwrap_or_else(|| highlighter::DEFAULT_SYNTAX_THEME.to_owned());
-        let mut evaluator = Evaluator::new_with_options(&syntax_theme);
-        evaluator.register("md", Box::new(directives::Markdown::new()));
-        evaluator.register("table", Box::new(directives::Dummy::new()));
-        evaluator.register("version", Box::new(directives::Version::new("3.4.0")));
+        let evaluator = Evaluator::new_with_options(&syntax_theme);
+        evaluator.register("md", Rc::new(directives::Markdown::new()));
+        evaluator.register("table", Rc::new(directives::Dummy::new()));
+        evaluator.register("version", Rc::new(directives::Version::new("3.4.0")));
         evaluator.register("note",
-                           Box::new(directives::Admonition::new("Note", "note")));
+                           Rc::new(directives::Admonition::new("Note", "note")));
         evaluator.register("warning",
-                           Box::new(directives::Admonition::new("Warning", "warning")));
-        evaluator.register("manual",
-                           Box::new(directives::LinkTemplate::new("https://docs.mongodb.com/manual")));
+                           Rc::new(directives::Admonition::new("Warning", "warning")));
+        evaluator.register("define-template", Rc::new(directives::DefineTemplate::new()));
         evaluator.register("definition-list",
-                           Box::new(directives::DefinitionList::new()));
-        evaluator.register("concat", Box::new(directives::Concat::new()));
-        evaluator.register("include", Box::new(directives::Include::new()));
-        evaluator.register("import", Box::new(directives::Import::new()));
-        evaluator.register("null", Box::new(directives::Dummy::new()));
-        evaluator.register("let", Box::new(directives::Let::new()));
-        evaluator.register("define", Box::new(directives::Define::new()));
-        evaluator.register("get", Box::new(directives::Get::new()));
-        evaluator.register("theme-config", Box::new(directives::ThemeConfig::new()));
-        evaluator.register("toctree", Box::new(directives::TocTree::new()));
+                           Rc::new(directives::DefinitionList::new()));
+        evaluator.register("concat", Rc::new(directives::Concat::new()));
+        evaluator.register("include", Rc::new(directives::Include::new()));
+        evaluator.register("import", Rc::new(directives::Import::new()));
+        evaluator.register("null", Rc::new(directives::Dummy::new()));
+        evaluator.register("let", Rc::new(directives::Let::new()));
+        evaluator.register("define", Rc::new(directives::Define::new()));
+        evaluator.register("get", Rc::new(directives::Get::new()));
+        evaluator.register("theme-config", Rc::new(directives::ThemeConfig::new()));
+        evaluator.register("toctree", Rc::new(directives::TocTree::new()));
 
         Ok(Project {
                verbose: false,

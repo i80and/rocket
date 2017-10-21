@@ -1,6 +1,9 @@
+(:import prelude.rock)
+
 # Home
 
-Rocket is a fast, powerful, and homoiconic text markup format with tight integration with
+Rocket is a fast, powerful, and homoiconic text (:wikipedia markup
+Markup_language) format with tight integration with
 [Markdown](https://daringfireball.net/projects/markdown/).
 
 (:toctree

@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
@@ -12,7 +13,7 @@ use parse::{Parser, Node, NodeValue};
 use toctree::TocTree;
 
 pub struct Evaluator {
-    directives: HashMap<String, Box<directives::DirectiveHandler>>,
+    directives: RefCell<HashMap<String, Rc<directives::DirectiveHandler>>>,
     current_slug: Option<Slug>,
 
     pub parser: RefCell<Parser>,
@@ -33,7 +34,7 @@ impl Evaluator {
 
     pub fn new_with_options(syntax_theme: &str) -> Self {
         Evaluator {
-            directives: HashMap::new(),
+            directives: RefCell::new(HashMap::new()),
             current_slug: None,
             parser: RefCell::new(Parser::new()),
             markdown: markdown::MarkdownRenderer::new(),
@@ -45,10 +46,10 @@ impl Evaluator {
         }
     }
 
-    pub fn register<S: Into<String>>(&mut self,
+    pub fn register<S: Into<String>>(&self,
                                      name: S,
-                                     handler: Box<directives::DirectiveHandler>) {
-        self.directives.insert(name.into(), handler);
+                                     handler: Rc<directives::DirectiveHandler>) {
+        self.directives.borrow_mut().insert(name.into(), handler);
     }
 
     pub fn evaluate(&self, node: &Node) -> String {
@@ -121,17 +122,20 @@ impl Evaluator {
             return Ok(value.to_owned());
         }
 
-        if let Some(handler) = self.directives.get(key) {
-            return match handler.handle(self, args) {
-                       Ok(result) => Ok(result),
-                       Err(_) => {
-                           self.error(node, &format!("Error in directive {}", key));
-                           Err(())
-                       }
-                   };
-        }
+        let handler = match self.directives.borrow().get(key) {
+            Some(handler) => handler.clone(),
+            None => {
+                self.error(node, &format!("Unknown directive {}", key));
+                return Err(());
+            }
+        };
 
-        self.error(node, &format!("Unknown directive {}", key));
-        Err(())
+        return match handler.handle(self, args) {
+            Ok(result) => Ok(result),
+            Err(_) => {
+                self.error(node, &format!("Error in directive {}", key));
+                Err(())
+            }
+        };
     }
 }
