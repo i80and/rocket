@@ -521,7 +521,7 @@ mod tests {
     #[test]
     fn test_version() {
         let evaluator = Evaluator::new();
-        evaluator.register("concat", Box::new(Concat::new()));
+        evaluator.register("concat", Rc::new(Concat::new()));
         let handler = Version::new("3.4.0");
 
         assert_eq!(handler.handle(&evaluator, &[]), Ok("3.4.0".to_owned()));
@@ -553,7 +553,7 @@ mod tests {
     #[test]
     fn test_concat() {
         let evaluator = Evaluator::new();
-        evaluator.register("version", Box::new(Version::new("3.4")));
+        evaluator.register("version", Rc::new(Version::new("3.4")));
         let handler = Concat::new();
 
         assert_eq!(handler.handle(&evaluator, &[]), Ok("".to_owned()));
@@ -603,7 +603,7 @@ mod tests {
         let evaluator = Evaluator::new();
         let handler = Let::new();
 
-        evaluator.register("concat", Box::new(Concat::new()));
+        evaluator.register("concat", Rc::new(Concat::new()));
 
         assert!(handler.handle(&evaluator, &[]).is_err());
         let result =
@@ -623,7 +623,7 @@ mod tests {
     #[test]
     fn test_define() {
         let evaluator = Evaluator::new();
-        evaluator.register("concat", Box::new(Concat::new()));
+        evaluator.register("concat", Rc::new(Concat::new()));
         let handler = Define::new();
 
         assert!(handler.handle(&evaluator, &[]).is_err());
@@ -644,7 +644,7 @@ mod tests {
     #[test]
     fn test_get() {
         let evaluator = Evaluator::new();
-        evaluator.register("concat", Box::new(Concat::new()));
+        evaluator.register("concat", Rc::new(Concat::new()));
         let handler = Get::new();
 
         evaluator
