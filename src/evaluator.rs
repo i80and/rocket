@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 use std::rc::Rc;
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
 use log;
@@ -13,17 +12,17 @@ use parse::{Parser, Node, NodeValue};
 use toctree::TocTree;
 
 pub struct Evaluator {
-    directives: RefCell<HashMap<String, Rc<directives::DirectiveHandler>>>,
+    directives: HashMap<String, Rc<directives::DirectiveHandler>>,
     current_slug: Option<Slug>,
 
-    pub parser: RefCell<Parser>,
+    pub parser: Parser,
     pub markdown: markdown::MarkdownRenderer,
     pub highlighter: SyntaxHighlighter,
 
-    pub variable_stack: RefCell<Vec<(String, String)>>,
-    pub ctx: RefCell<HashMap<String, NodeValue>>,
-    pub theme_config: RefCell<serde_json::map::Map<String, serde_json::Value>>,
-    pub toctree: RefCell<TocTree>,
+    pub variable_stack: Vec<(String, String)>,
+    pub ctx: HashMap<String, NodeValue>,
+    pub theme_config: serde_json::map::Map<String, serde_json::Value>,
+    pub toctree: TocTree,
 }
 
 impl Evaluator {
@@ -34,25 +33,25 @@ impl Evaluator {
 
     pub fn new_with_options(syntax_theme: &str) -> Self {
         Evaluator {
-            directives: RefCell::new(HashMap::new()),
+            directives: HashMap::new(),
             current_slug: None,
-            parser: RefCell::new(Parser::new()),
+            parser: Parser::new(),
             markdown: markdown::MarkdownRenderer::new(),
             highlighter: SyntaxHighlighter::new(syntax_theme),
-            variable_stack: RefCell::new(vec![]),
-            ctx: RefCell::new(HashMap::new()),
-            theme_config: RefCell::new(serde_json::map::Map::new()),
-            toctree: RefCell::new(TocTree::new(Slug::new("index".to_owned()), true)),
+            variable_stack: vec![],
+            ctx: HashMap::new(),
+            theme_config: serde_json::map::Map::new(),
+            toctree: TocTree::new(Slug::new("index".to_owned()), true),
         }
     }
 
-    pub fn register<S: Into<String>>(&self,
+    pub fn register<S: Into<String>>(&mut self,
                                      name: S,
                                      handler: Rc<directives::DirectiveHandler>) {
-        self.directives.borrow_mut().insert(name.into(), handler);
+        self.directives.insert(name.into(), handler);
     }
 
-    pub fn evaluate(&self, node: &Node) -> String {
+    pub fn evaluate(&mut self, node: &Node) -> String {
         match node.value {
             NodeValue::Owned(ref s) => s.to_owned(),
             NodeValue::Children(ref children) => {
@@ -73,8 +72,7 @@ impl Evaluator {
     }
 
     pub fn log(&self, node: &Node, message: &str, level: log::LogLevel) {
-        let parser = self.parser.borrow();
-        let file_path = parser.get_node_source_path(node);
+        let file_path = self.parser.get_node_source_path(node);
         log!(level,
              "{}\n  --> {}:?:?",
              message,
@@ -90,10 +88,10 @@ impl Evaluator {
         self.log(node, message, log::LogLevel::Error);
     }
 
-    pub fn reset(&self) {
-        self.ctx.borrow_mut().clear();
-        self.theme_config.borrow_mut().clear();
-        self.variable_stack.borrow_mut().clear();
+    pub fn reset(&mut self) {
+        self.ctx.clear();
+        self.theme_config.clear();
+        self.variable_stack.clear();
     }
 
     pub fn set_slug(&mut self, slug: Slug) {
@@ -106,9 +104,8 @@ impl Evaluator {
             .expect("Requested slug before set")
     }
 
-    fn lookup(&self, node: &Node, key: &str, args: &[Node]) -> Result<String, ()> {
+    fn lookup(&mut self, node: &Node, key: &str, args: &[Node]) -> Result<String, ()> {
         let var = self.variable_stack
-            .borrow()
             .iter()
             .rev()
             .find(|&&(ref k, _)| k == key)
@@ -122,7 +119,7 @@ impl Evaluator {
             return Ok(value.to_owned());
         }
 
-        let handler = match self.directives.borrow().get(key) {
+        let handler = match self.directives.get(key) {
             Some(handler) => handler.clone(),
             None => {
                 self.error(node, &format!("Unknown directive {}", key));

@@ -29,7 +29,6 @@ mod parse;
 mod theme;
 mod toctree;
 
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::convert::From;
@@ -77,7 +76,7 @@ struct Project {
     output: PathBuf,
     templates: Vec<(glob::Pattern, String)>,
     theme_constants: serde_json::map::Map<String, serde_json::Value>,
-    evaluator: Evaluator,
+    syntax_theme: String,
 
     pretty_url: bool,
 }
@@ -109,47 +108,27 @@ impl Project {
         let syntax_theme = config
             .syntax_theme
             .unwrap_or_else(|| highlighter::DEFAULT_SYNTAX_THEME.to_owned());
-        let evaluator = Evaluator::new_with_options(&syntax_theme);
-        evaluator.register("md", Rc::new(directives::Markdown::new()));
-        evaluator.register("table", Rc::new(directives::Dummy::new()));
-        evaluator.register("version", Rc::new(directives::Version::new("3.4.0")));
-        evaluator.register("note",
-                           Rc::new(directives::Admonition::new("Note", "note")));
-        evaluator.register("warning",
-                           Rc::new(directives::Admonition::new("Warning", "warning")));
-        evaluator.register("define-template", Rc::new(directives::DefineTemplate::new()));
-        evaluator.register("definition-list",
-                           Rc::new(directives::DefinitionList::new()));
-        evaluator.register("concat", Rc::new(directives::Concat::new()));
-        evaluator.register("include", Rc::new(directives::Include::new()));
-        evaluator.register("import", Rc::new(directives::Import::new()));
-        evaluator.register("null", Rc::new(directives::Dummy::new()));
-        evaluator.register("let", Rc::new(directives::Let::new()));
-        evaluator.register("define", Rc::new(directives::Define::new()));
-        evaluator.register("get", Rc::new(directives::Get::new()));
-        evaluator.register("theme-config", Rc::new(directives::ThemeConfig::new()));
-        evaluator.register("toctree", Rc::new(directives::TocTree::new()));
 
         Ok(Project {
-               verbose: false,
-               theme: theme,
-               content_dir: config
-                   .content_dir
-                   .unwrap_or_else(|| PathBuf::from("content")),
-               output: config.output.unwrap_or_else(|| PathBuf::from("build")),
-               templates: path_patterns,
-               theme_constants: config
-                   .theme_constants
-                   .unwrap_or_else(serde_json::map::Map::new),
-               evaluator: evaluator,
-               pretty_url: true,
+                verbose: false,
+                theme,
+                content_dir: config
+                    .content_dir
+                    .unwrap_or_else(|| PathBuf::from("content")),
+                output: config.output.unwrap_or_else(|| PathBuf::from("build")),
+                templates: path_patterns,
+                theme_constants: config
+                    .theme_constants
+                    .unwrap_or_else(serde_json::map::Map::new),
+                syntax_theme,
+                pretty_url: true,
            })
     }
 
-    fn build_file(&self, evaluator: &Evaluator, slug: &Slug, path: &Path) -> Result<Page, ()> {
+    fn build_file(&self, evaluator: &mut Evaluator, slug: &Slug, path: &Path) -> Result<Page, ()> {
         debug!("Compiling {}", slug);
 
-        let node = match evaluator.parser.borrow_mut().parse(path) {
+        let node = match evaluator.parser.parse(path) {
             Ok(n) => n,
             Err(_) => {
                 error!("Failed to parse {}", path.to_string_lossy());
@@ -163,7 +142,7 @@ impl Project {
             source_path: path.to_owned(),
             slug: slug.clone(),
             body: output,
-            theme_config: evaluator.theme_config.borrow().clone(),
+            theme_config: evaluator.theme_config.clone(),
         };
 
         evaluator.reset();
@@ -191,7 +170,7 @@ impl Project {
         Ok(())
     }
 
-    fn build_project(&mut self) {
+    fn build_project(&self, evaluator: &mut Evaluator) {
         let mut pending_pages = vec![];
         let mut titles = HashMap::new();
 
@@ -208,8 +187,8 @@ impl Project {
             let stem = slug.file_stem().unwrap();
             let slug = Slug::new(dir.join(stem).to_string_lossy().as_ref().to_owned());
 
-            self.evaluator.set_slug(slug.clone());
-            match self.build_file(&self.evaluator, &slug, path) {
+            evaluator.set_slug(slug.clone());
+            match self.build_file(evaluator, &slug, path) {
                 Ok(page) => {
                     titles.insert(page.slug.to_owned(), page.title());
                     pending_pages.push(page);
@@ -220,8 +199,7 @@ impl Project {
             }
         }
 
-        let mut toctree = mem::replace(&mut self.evaluator.toctree, RefCell::new(TocTree::new_empty()))
-            .into_inner();
+        let mut toctree = mem::replace(&mut evaluator.toctree, TocTree::new_empty());
         toctree.finish(titles);
 
         let mut renderer = theme::Renderer::new(&self.theme, toctree)
@@ -253,8 +231,29 @@ fn main() {
 
     simple_logger::init_with_level(loglevel).expect("Failed to initialize logger");
 
+    let mut evaluator = Evaluator::new_with_options(&config.syntax_theme);
+    evaluator.register("md", Rc::new(directives::Markdown::new()));
+    evaluator.register("table", Rc::new(directives::Dummy::new()));
+    evaluator.register("version", Rc::new(directives::Version::new("3.4.0")));
+    evaluator.register("note",
+                       Rc::new(directives::Admonition::new("Note", "note")));
+    evaluator.register("warning",
+                       Rc::new(directives::Admonition::new("Warning", "warning")));
+    evaluator.register("define-template", Rc::new(directives::DefineTemplate::new()));
+    evaluator.register("definition-list",
+                       Rc::new(directives::DefinitionList::new()));
+    evaluator.register("concat", Rc::new(directives::Concat::new()));
+    evaluator.register("include", Rc::new(directives::Include::new()));
+    evaluator.register("import", Rc::new(directives::Import::new()));
+    evaluator.register("null", Rc::new(directives::Dummy::new()));
+    evaluator.register("let", Rc::new(directives::Let::new()));
+    evaluator.register("define", Rc::new(directives::Define::new()));
+    evaluator.register("get", Rc::new(directives::Get::new()));
+    evaluator.register("theme-config", Rc::new(directives::ThemeConfig::new()));
+    evaluator.register("toctree", Rc::new(directives::TocTree::new()));
+
     let start_time = time::precise_time_ns();
-    config.build_project();
+    config.build_project(&mut evaluator);
 
     info!("Took {} seconds",
           (time::precise_time_ns() - start_time) as f64 / (1_000_000_000 as f64));
