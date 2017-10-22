@@ -1,6 +1,7 @@
-use std::{cmp, iter, slice, str};
+use std::{cmp, iter, mem, slice, str};
 use std::rc::Rc;
 use std::path::{Path, PathBuf};
+use std::collections::hash_map::Entry;
 use regex::{Captures, Regex};
 use serde_json;
 use parse::{Node, NodeValue};
@@ -328,12 +329,6 @@ impl DirectiveHandler for Import {
 
 pub struct Let;
 
-impl Let {
-    pub fn new() -> Let {
-        Let
-    }
-}
-
 impl DirectiveHandler for Let {
     fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
         if args.len() < 1 {
@@ -353,23 +348,32 @@ impl DirectiveHandler for Let {
 
                 for pair in children.chunks(2) {
                     let evaluated_key = evaluator.evaluate(&pair[0]);
-                    let evaluated_value = evaluator.evaluate(&pair[1]);
+                    let evaluated_value = NodeValue::Owned(evaluator.evaluate(&pair[1]));
 
-                    variables.push((evaluated_key, evaluated_value));
+                    let mut entry = evaluator.ctx.entry(evaluated_key.to_owned());
+                    let original_value = match entry {
+                        Entry::Occupied(mut slot) => {
+                            Some(mem::replace(slot.get_mut(), evaluated_value))
+                        }
+                        Entry::Vacant(slot) => {
+                            slot.insert(evaluated_value);
+                            None
+                        }
+                    };
+
+                    variables.push((evaluated_key, original_value));
                 }
             }
         }
 
-        evaluator.variable_stack.extend_from_slice(&variables);
-
         let concat = Concat::new();
         let result = concat.handle(evaluator, &args[1..]);
 
-        for _ in 0..variables.len() {
-            evaluator
-                .variable_stack
-                .pop()
-                .expect("Variable stack length mismatch");
+        for (key, original_value) in variables {
+            match original_value {
+                Some(value) => evaluator.ctx.insert(key, value),
+                None => evaluator.ctx.remove(&key),
+            };
         }
 
         result
@@ -710,7 +714,7 @@ mod tests {
     #[test]
     fn test_let() {
         let mut evaluator = Evaluator::new();
-        let handler = Let::new();
+        let handler = Let;
 
         evaluator.register("concat", Rc::new(Concat::new()));
 

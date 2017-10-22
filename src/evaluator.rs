@@ -42,7 +42,6 @@ pub struct Evaluator {
     pub markdown: markdown::MarkdownRenderer,
     pub highlighter: SyntaxHighlighter,
 
-    pub variable_stack: Vec<(String, String)>,
     pub ctx: HashMap<String, NodeValue>,
     pub refdefs: HashMap<String, RefDef>,
     pub theme_config: serde_json::map::Map<String, serde_json::Value>,
@@ -79,7 +78,6 @@ impl Evaluator {
             parser: Parser::new(),
             markdown: markdown::MarkdownRenderer::new(),
             highlighter: SyntaxHighlighter::new(syntax_theme),
-            variable_stack: vec![],
             ctx: HashMap::new(),
             refdefs: HashMap::new(),
             theme_config: serde_json::map::Map::new(),
@@ -139,7 +137,6 @@ impl Evaluator {
     pub fn reset(&mut self) {
         self.ctx.clear();
         self.theme_config.clear();
-        self.variable_stack.clear();
     }
 
     pub fn set_slug(&mut self, slug: Slug) {
@@ -185,17 +182,7 @@ impl Evaluator {
     }
 
     fn lookup(&mut self, node: &Node, key: &str, args: &[Node]) -> Result<String, ()> {
-        let var = self.variable_stack
-            .iter()
-            .rev()
-            .find(|&&(ref k, _)| k == key)
-            .map(|&(_, ref v)| v.to_owned());
-
-        if let Some(value) = var {
-            if !args.is_empty() {
-                return Err(());
-            }
-
+        if let Some(&NodeValue::Owned(ref value)) = self.ctx.get(key) {
             return Ok(value.to_owned());
         }
 

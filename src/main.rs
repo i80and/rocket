@@ -266,7 +266,7 @@ fn main() {
     evaluator.register("include", Rc::new(directives::Include::new()));
     evaluator.register("import", Rc::new(directives::Import::new()));
     evaluator.register("null", Rc::new(directives::Dummy::new()));
-    evaluator.register("let", Rc::new(directives::Let::new()));
+    evaluator.register("let", Rc::new(directives::Let));
     evaluator.register("define", Rc::new(directives::Define::new()));
     evaluator.register("get", Rc::new(directives::Get::new()));
     evaluator.register("theme-config", Rc::new(directives::ThemeConfig::new()));
