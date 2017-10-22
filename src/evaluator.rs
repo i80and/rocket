@@ -10,11 +10,14 @@ use regex::{Captures, Regex};
 use directives;
 use highlighter::{self, SyntaxHighlighter};
 use markdown;
-use page::{Slug, Page};
-use parse::{Parser, Node, NodeValue};
+use page::{Page, Slug};
+use parse::{Node, NodeValue, Parser};
 use toctree::TocTree;
 
-pub enum PlaceholderAction { Path, Title, }
+pub enum PlaceholderAction {
+    Path,
+    Title,
+}
 
 #[derive(Debug)]
 pub struct RefDef {
@@ -67,7 +70,8 @@ impl Evaluator {
         }
 
         let pattern_text = format!(r"%{}-(\d+)%", &placeholder_prefix);
-        let placeholder_pattern = Regex::new(&pattern_text).expect("Failed to compile linker pattern");
+        let placeholder_pattern =
+            Regex::new(&pattern_text).expect("Failed to compile linker pattern");
 
         Evaluator {
             directives: HashMap::new(),
@@ -87,38 +91,40 @@ impl Evaluator {
         }
     }
 
-    pub fn register<S: Into<String>>(&mut self,
-                                     name: S,
-                                     handler: Rc<directives::DirectiveHandler>) {
+    pub fn register<S: Into<String>>(
+        &mut self,
+        name: S,
+        handler: Rc<directives::DirectiveHandler>,
+    ) {
         self.directives.insert(name.into(), handler);
     }
 
     pub fn evaluate(&mut self, node: &Node) -> String {
         match node.value {
             NodeValue::Owned(ref s) => s.to_owned(),
-            NodeValue::Children(ref children) => {
-                if let Some(first_element) = children.get(0) {
-                    let directive_name = match first_element.value {
-                        NodeValue::Owned(ref dname) => Cow::Borrowed(dname),
-                        NodeValue::Children(_) => Cow::Owned(self.evaluate(first_element)),
-                    };
+            NodeValue::Children(ref children) => if let Some(first_element) = children.get(0) {
+                let directive_name = match first_element.value {
+                    NodeValue::Owned(ref dname) => Cow::Borrowed(dname),
+                    NodeValue::Children(_) => Cow::Owned(self.evaluate(first_element)),
+                };
 
-                    self.lookup(node, directive_name.as_ref(), &children[1..])
-                        .unwrap_or_else(|_| "".to_owned())
-                } else {
-                    println!("Empty node");
-                    "".to_owned()
-                }
-            }
+                self.lookup(node, directive_name.as_ref(), &children[1..])
+                    .unwrap_or_else(|_| "".to_owned())
+            } else {
+                println!("Empty node");
+                "".to_owned()
+            },
         }
     }
 
     pub fn log(&self, node: &Node, message: &str, level: log::LogLevel) {
         let file_path = self.parser.get_node_source_path(node);
-        log!(level,
-             "{}\n  --> {}:?:?",
-             message,
-             file_path.unwrap_or_else(|| Path::new("")).to_string_lossy());
+        log!(
+            level,
+            "{}\n  --> {}:?:?",
+            message,
+            file_path.unwrap_or_else(|| Path::new("")).to_string_lossy()
+        );
     }
 
     #[allow(dead_code)]
@@ -148,25 +154,32 @@ impl Evaluator {
 
     pub fn get_placeholder(&mut self, refid: String, action: PlaceholderAction) -> String {
         self.pending_links.push((action, refid));
-        format!("%{}-{}%", self.placeholder_prefix, self.pending_links.len() - 1)
+        format!(
+            "%{}-{}%",
+            self.placeholder_prefix,
+            self.pending_links.len() - 1
+        )
     }
 
     pub fn substitute(&self, page: &Page) -> Result<String, ()> {
-        let result = self.placeholder_pattern.replace_all(&page.body, |captures: &Captures| {
-            let ref_number = str::parse::<u64>(&captures[1]).expect("Failed to parse refid");
-            let &(ref action, ref refid) = self.pending_links.get(ref_number as usize).expect("Missing ref number");
-            let refdef = match self.refdefs.get(refid) {
-                Some(r) => r,
-                None => {
-                    return "unknown refdef".to_owned();
-                },
-            };
+        let result = self.placeholder_pattern
+            .replace_all(&page.body, |captures: &Captures| {
+                let ref_number = str::parse::<u64>(&captures[1]).expect("Failed to parse refid");
+                let &(ref action, ref refid) = self.pending_links
+                    .get(ref_number as usize)
+                    .expect("Missing ref number");
+                let refdef = match self.refdefs.get(refid) {
+                    Some(r) => r,
+                    None => {
+                        return "unknown refdef".to_owned();
+                    }
+                };
 
-            match *action {
-                PlaceholderAction::Path => page.slug.path_to(&refdef.slug, true),
-                PlaceholderAction::Title => refdef.title.to_owned(),
-            }
-        });
+                match *action {
+                    PlaceholderAction::Path => page.slug.path_to(&refdef.slug, true),
+                    PlaceholderAction::Title => refdef.title.to_owned(),
+                }
+            });
 
         Ok(result.into_owned())
     }

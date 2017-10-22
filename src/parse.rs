@@ -209,12 +209,10 @@ impl TokenHandler for StateExpression {
             Token::RightParen | Token::Dedent => {
                 return StackRequest::Pop(1);
             }
-            Token::Indent => {
-                if self.saw_rocket {
-                    self.saw_rocket = false;
-                    return StackRequest::Push(Box::new(StateRocket::new(self.file_id)));
-                }
-            }
+            Token::Indent => if self.saw_rocket {
+                self.saw_rocket = false;
+                return StackRequest::Push(Box::new(StateRocket::new(self.file_id)));
+            },
         }
 
         if self.saw_rocket {
@@ -243,28 +241,29 @@ struct ParseContextStack {
 impl ParseContextStack {
     fn new(file_id: FileID) -> ParseContextStack {
         ParseContextStack {
-            stack: vec![Box::new(StateRocket {
-                                     root: vec![Node::new_string("md")],
-                                     buffer: vec![],
-                                     file_id: file_id,
-                                 })],
+            stack: vec![
+                Box::new(StateRocket {
+                    root: vec![Node::new_string("md")],
+                    buffer: vec![],
+                    file_id: file_id,
+                }),
+            ],
         }
     }
 
     fn handle(&mut self, token: &Token) {
         match self.stack
-                  .last_mut()
-                  .expect("Empty parse stack")
-                  .handle_token(token) {
+            .last_mut()
+            .expect("Empty parse stack")
+            .handle_token(token)
+        {
             StackRequest::Push(handler) => {
                 self.stack.push(handler);
             }
-            StackRequest::Pop(n) => {
-                for _ in 0..n {
-                    let mut handler = self.stack.pop().expect("Cannot pop last handler");
-                    (**self.stack.last_mut().expect("Empty parse stack")).push(handler.finish());
-                }
-            }
+            StackRequest::Pop(n) => for _ in 0..n {
+                let mut handler = self.stack.pop().expect("Cannot pop last handler");
+                (**self.stack.last_mut().expect("Empty parse stack")).push(handler.finish());
+            },
             StackRequest::None => (),
         }
     }

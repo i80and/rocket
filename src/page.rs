@@ -9,9 +9,7 @@ pub struct Slug {
 
 impl Slug {
     pub fn new(slug: String) -> Slug {
-        Slug {
-            slug: slug,
-        }
+        Slug { slug: slug }
     }
 
     pub fn create_output_path(&self, prefix: &Path, pretty_url: bool) -> PathBuf {

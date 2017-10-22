@@ -20,11 +20,12 @@ struct TocTreeHelper {
 }
 
 impl handlebars::HelperDef for TocTreeHelper {
-    fn call(&self,
-            h: &handlebars::Helper,
-            _: &Handlebars,
-            rc: &mut handlebars::RenderContext)
-            -> Result<(), handlebars::RenderError> {
+    fn call(
+        &self,
+        h: &handlebars::Helper,
+        _: &Handlebars,
+        rc: &mut handlebars::RenderContext,
+    ) -> Result<(), handlebars::RenderError> {
         let slug = h.param(0).unwrap().value().as_str().unwrap();
         let html = self.toctree
             .generate_html(&Slug::new(slug.to_owned()), &self.current_slug, true)
@@ -38,11 +39,12 @@ impl handlebars::HelperDef for TocTreeHelper {
 struct StripTags;
 
 impl handlebars::HelperDef for StripTags {
-    fn call(&self,
-            h: &handlebars::Helper,
-            _: &Handlebars,
-            rc: &mut handlebars::RenderContext)
-            -> Result<(), handlebars::RenderError> {
+    fn call(
+        &self,
+        h: &handlebars::Helper,
+        _: &Handlebars,
+        rc: &mut handlebars::RenderContext,
+    ) -> Result<(), handlebars::RenderError> {
         let arg = h.param(0).unwrap().value().as_str().unwrap();
         let stripped = PAT_TAGS.replace_all(arg, "");
         rc.writer.write_all(stripped.as_bytes())?;
@@ -71,10 +73,10 @@ impl Theme {
 
         let constants = config.constants.unwrap_or_else(serde_json::map::Map::new);
         Ok(Theme {
-               path: path.to_owned(),
-               constants: constants,
-               templates: config.templates,
-           })
+            path: path.to_owned(),
+            constants: constants,
+            templates: config.templates,
+        })
     }
 }
 
@@ -85,33 +87,34 @@ pub struct Renderer<'a> {
 }
 
 impl<'a> Renderer<'a> {
-    pub fn new(theme: &'a Theme,
-               toctree: TocTree)
-               -> Result<Renderer<'a>, handlebars::TemplateFileError> {
+    pub fn new(
+        theme: &'a Theme,
+        toctree: TocTree,
+    ) -> Result<Renderer<'a>, handlebars::TemplateFileError> {
         let mut handlebars = Handlebars::new();
         let theme_dir_path = theme.path.parent().unwrap_or_else(|| Path::new(""));
 
         for (template_name, template_path) in &theme.templates {
             let template_path = theme_dir_path.join(template_path);
-            handlebars
-                .register_template_file(template_name, template_path)?;
+            handlebars.register_template_file(template_name, template_path)?;
         }
 
         handlebars.register_helper("striptags", Box::new(StripTags));
 
         Ok(Renderer {
-               toctree: Arc::new(toctree),
-               handlebars,
-               constants: &theme.constants,
-           })
+            toctree: Arc::new(toctree),
+            handlebars,
+            constants: &theme.constants,
+        })
     }
 
-    pub fn render(&mut self,
-                  template_name: &str,
-                  project_args: &serde_json::map::Map<String, serde_json::Value>,
-                  page: &Page,
-                  body: &str)
-                  -> Result<String, handlebars::RenderError> {
+    pub fn render(
+        &mut self,
+        template_name: &str,
+        project_args: &serde_json::map::Map<String, serde_json::Value>,
+        page: &Page,
+        body: &str,
+    ) -> Result<String, handlebars::RenderError> {
         let ctx = json!({
             "page": &page.theme_config,
             "project": project_args,

@@ -44,17 +44,24 @@ impl TocTree {
 
         self.inverse_children
             .entry(child)
-            .or_insert_with(|| vec![]).push(parent_slug.to_owned());
+            .or_insert_with(|| vec![])
+            .push(parent_slug.to_owned());
         self.children
             .entry(parent_slug.to_owned())
-            .or_insert_with(|| vec![]).push(new_element);
+            .or_insert_with(|| vec![])
+            .push(new_element);
     }
 
     pub fn finish(&mut self, titles: HashMap<Slug, String>) {
         self.titles = titles;
     }
 
-    pub fn generate_html(&self, root: &Slug, current_slug: &Slug, is_root: bool) -> Result<Vec<Cow<'static, str>>, String> {
+    pub fn generate_html(
+        &self,
+        root: &Slug,
+        current_slug: &Slug,
+        is_root: bool,
+    ) -> Result<Vec<Cow<'static, str>>, String> {
         let children = match self.children.get(root) {
             Some(children) => children,
             None => {
@@ -67,10 +74,14 @@ impl TocTree {
 
         if is_root {
             result.push(Cow::Borrowed(r#"<li class="current">"#));
-            let title = self.titles.get(&self.root).ok_or_else(|| format!("Failed to find toctree root '{}'", &self.root))?;
-            result.push(Cow::Owned(format!(r#"<a href="{}">{}</a>"#,
-                                           current_slug.path_to(&Slug::new("".to_owned()), self.pretty_url),
-                                           title)));
+            let title = self.titles
+                .get(&self.root)
+                .ok_or_else(|| format!("Failed to find toctree root '{}'", &self.root))?;
+            result.push(Cow::Owned(format!(
+                r#"<a href="{}">{}</a>"#,
+                current_slug.path_to(&Slug::new("".to_owned()), self.pretty_url),
+                title
+            )));
             result.push(Cow::Borrowed("</li>"));
         }
 
@@ -83,16 +94,16 @@ impl TocTree {
 
             let title = match child.title.as_ref() {
                 Some(t) => t,
-                None => {
-                    self.titles
-                        .get(&child.slug)
-                        .ok_or_else(|| format!("Failed to find toctree entry '{}'", &child.slug))?
-                }
+                None => self.titles
+                    .get(&child.slug)
+                    .ok_or_else(|| format!("Failed to find toctree entry '{}'", &child.slug))?,
             };
 
-            result.push(Cow::Owned(format!(r#"<a href="{}">{}</a>"#,
-                                           current_slug.path_to(&child.slug, self.pretty_url),
-                                           title)));
+            result.push(Cow::Owned(format!(
+                r#"<a href="{}">{}</a>"#,
+                current_slug.path_to(&child.slug, self.pretty_url),
+                title
+            )));
             result.extend(self.generate_html(&child.slug, current_slug, false)?);
             result.push(Cow::Borrowed("</li>"));
         }
@@ -112,11 +123,9 @@ impl TocTree {
         }
 
         match self.inverse_children.get(child) {
-            Some(parents) => {
-                parents
-                    .iter()
-                    .any(|parent| self.is_ancestor_of(ancestor, parent))
-            }
+            Some(parents) => parents
+                .iter()
+                .any(|parent| self.is_ancestor_of(ancestor, parent)),
             _ => false,
         }
     }

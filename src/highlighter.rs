@@ -28,6 +28,10 @@ impl SyntaxHighlighter {
         let syntax = syntax_set.find_syntax_by_extension(language).ok_or(())?;
         let theme = &theme_set.themes[&self.theme];
 
-        Ok(syntect::html::highlighted_snippet_for_string(code, syntax, theme))
+        Ok(syntect::html::highlighted_snippet_for_string(
+            code,
+            syntax,
+            theme,
+        ))
     }
 }

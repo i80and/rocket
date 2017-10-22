@@ -64,23 +64,19 @@ pub fn lex(data: &str) -> Vec<Token> {
                     Token::Text(&token_text[new_indentation_level..])
                 }
             }
-            b'(' => {
-                match bytes.get(1) {
-                    Some(&b':') => Token::StartBlock,
-                    None => Token::Character('('),
-                    _ => panic!("Bad character matched: Expected ':' or nothing"),
+            b'(' => match bytes.get(1) {
+                Some(&b':') => Token::StartBlock,
+                None => Token::Character('('),
+                _ => panic!("Bad character matched: Expected ':' or nothing"),
+            },
+            b'=' => match bytes.get(1) {
+                Some(&b'>') => {
+                    start_rocket = true;
+                    Token::Rocket
                 }
-            }
-            b'=' => {
-                match bytes.get(1) {
-                    Some(&b'>') => {
-                        start_rocket = true;
-                        Token::Rocket
-                    }
-                    None => Token::Character('='),
-                    _ => panic!("Bad character matched: Expected '>' or nothing"),
-                }
-            }
+                None => Token::Character('='),
+                _ => panic!("Bad character matched: Expected '>' or nothing"),
+            },
             _ => Token::Text(token_text),
         };
 
@@ -106,32 +102,38 @@ mod tests {
 
     #[test]
     fn test_expression() {
-        assert_eq!(lex(r#"(:foo bar (:a "b c") "baz" )"#),
-                   vec![Token::StartBlock,
-                        Token::Text("foo"),
-                        Token::Text(" "),
-                        Token::Text("bar"),
-                        Token::Text(" "),
-                        Token::StartBlock,
-                        Token::Text("a"),
-                        Token::Text(" "),
-                        Token::Quote,
-                        Token::Text("b"),
-                        Token::Text(" "),
-                        Token::Text("c"),
-                        Token::Quote,
-                        Token::RightParen,
-                        Token::Text(" "),
-                        Token::Quote,
-                        Token::Text("baz"),
-                        Token::Quote,
-                        Token::Text(" "),
-                        Token::RightParen]);
+        assert_eq!(
+            lex(r#"(:foo bar (:a "b c") "baz" )"#),
+            vec![
+                Token::StartBlock,
+                Token::Text("foo"),
+                Token::Text(" "),
+                Token::Text("bar"),
+                Token::Text(" "),
+                Token::StartBlock,
+                Token::Text("a"),
+                Token::Text(" "),
+                Token::Quote,
+                Token::Text("b"),
+                Token::Text(" "),
+                Token::Text("c"),
+                Token::Quote,
+                Token::RightParen,
+                Token::Text(" "),
+                Token::Quote,
+                Token::Text("baz"),
+                Token::Quote,
+                Token::Text(" "),
+                Token::RightParen,
+            ]
+        );
     }
 
     #[test]
     fn test_rocket() {
-        assert_eq!(lex(r#"
+        assert_eq!(
+            lex(
+                r#"
 (:note "a title" =>
   stuff 1
 
@@ -141,46 +143,50 @@ mod tests {
     more stuff
 
   closing nested
-"#),
-                   vec![Token::Text("\n"),
-                        Token::StartBlock,
-                        Token::Text("note"),
-                        Token::Text(" "),
-                        Token::Quote,
-                        Token::Text("a"),
-                        Token::Text(" "),
-                        Token::Text("title"),
-                        Token::Quote,
-                        Token::Text(" "),
-                        Token::Rocket,
-                        Token::Indent,
-                        Token::Text(" "),
-                        Token::Text("stuff"),
-                        Token::Text(" "),
-                        Token::Text("1"),
-                        Token::Character('\n'),
-                        Token::Text(" "),
-                        Token::Text("stuff"),
-                        Token::Text(" "),
-                        Token::Text("2"),
-                        Token::Character('\n'),
-                        Token::Text(" "),
-                        Token::StartBlock,
-                        Token::Text("note"),
-                        Token::Text(" "),
-                        Token::Rocket,
-                        Token::Indent,
-                        Token::Text(" "),
-                        Token::Text("more"),
-                        Token::Text(" "),
-                        Token::Text("stuff"),
-                        Token::Character('\n'),
-                        Token::Dedent,
-                        Token::Text(" "),
-                        Token::Text("closing"),
-                        Token::Text(" "),
-                        Token::Text("nested"),
-                        Token::Dedent,
-                        Token::Text("\n")]);
+"#
+            ),
+            vec![
+                Token::Text("\n"),
+                Token::StartBlock,
+                Token::Text("note"),
+                Token::Text(" "),
+                Token::Quote,
+                Token::Text("a"),
+                Token::Text(" "),
+                Token::Text("title"),
+                Token::Quote,
+                Token::Text(" "),
+                Token::Rocket,
+                Token::Indent,
+                Token::Text(" "),
+                Token::Text("stuff"),
+                Token::Text(" "),
+                Token::Text("1"),
+                Token::Character('\n'),
+                Token::Text(" "),
+                Token::Text("stuff"),
+                Token::Text(" "),
+                Token::Text("2"),
+                Token::Character('\n'),
+                Token::Text(" "),
+                Token::StartBlock,
+                Token::Text("note"),
+                Token::Text(" "),
+                Token::Rocket,
+                Token::Indent,
+                Token::Text(" "),
+                Token::Text("more"),
+                Token::Text(" "),
+                Token::Text("stuff"),
+                Token::Character('\n'),
+                Token::Dedent,
+                Token::Text(" "),
+                Token::Text("closing"),
+                Token::Text(" "),
+                Token::Text("nested"),
+                Token::Dedent,
+                Token::Text("\n"),
+            ]
+        );
     }
 }

@@ -2,19 +2,19 @@ extern crate argparse;
 extern crate comrak;
 extern crate glob;
 extern crate handlebars;
-extern crate lazycell;
 #[macro_use]
 extern crate lazy_static;
+extern crate lazycell;
 #[macro_use]
 extern crate log;
+extern crate rand;
+extern crate regex;
 #[macro_use]
 extern crate serde_derive;
 #[macro_use]
 extern crate serde_json;
 extern crate simple_logger;
 extern crate syntect;
-extern crate rand;
-extern crate regex;
 extern crate time;
 extern crate toml;
 extern crate typed_arena;
@@ -97,12 +97,12 @@ impl Project {
             .templates
             .iter()
             .map(|(k, v)| {
-                     let pattern = match glob::Pattern::new(k) {
-                         Ok(p) => p,
-                         Err(_) => return Err(()),
-                     };
-                     Ok((pattern, v.to_owned()))
-                 })
+                let pattern = match glob::Pattern::new(k) {
+                    Ok(p) => p,
+                    Err(_) => return Err(()),
+                };
+                Ok((pattern, v.to_owned()))
+            })
             .collect();
 
         let path_patterns = path_patterns.or(Err(()))?;
@@ -112,19 +112,19 @@ impl Project {
             .unwrap_or_else(|| highlighter::DEFAULT_SYNTAX_THEME.to_owned());
 
         Ok(Project {
-                verbose: false,
-                theme,
-                content_dir: config
-                    .content_dir
-                    .unwrap_or_else(|| PathBuf::from("content")),
-                output: config.output.unwrap_or_else(|| PathBuf::from("build")),
-                templates: path_patterns,
-                theme_constants: config
-                    .theme_constants
-                    .unwrap_or_else(serde_json::map::Map::new),
-                syntax_theme,
-                pretty_url: true,
-           })
+            verbose: false,
+            theme,
+            content_dir: config
+                .content_dir
+                .unwrap_or_else(|| PathBuf::from("content")),
+            output: config.output.unwrap_or_else(|| PathBuf::from("build")),
+            templates: path_patterns,
+            theme_constants: config
+                .theme_constants
+                .unwrap_or_else(serde_json::map::Map::new),
+            syntax_theme,
+            pretty_url: true,
+        })
     }
 
     fn build_file(&self, evaluator: &mut Evaluator, path: &Path) -> Result<Page, ()> {
@@ -151,7 +151,12 @@ impl Project {
         Ok(page)
     }
 
-    fn link_file(&self, evaluator: &Evaluator, page: &Page, renderer: &mut theme::Renderer) -> Result<(), LinkError> {
+    fn link_file(
+        &self,
+        evaluator: &Evaluator,
+        page: &Page,
+        renderer: &mut theme::Renderer,
+    ) -> Result<(), LinkError> {
         debug!("Linking {}", &page.slug);
 
         // Find the template that matches this path
@@ -211,8 +216,8 @@ impl Project {
         let mut toctree = mem::replace(&mut evaluator.toctree, TocTree::new_empty());
         toctree.finish(titles);
 
-        let mut renderer = theme::Renderer::new(&self.theme, toctree)
-            .expect("Failed to construct renderer");
+        let mut renderer =
+            theme::Renderer::new(&self.theme, toctree).expect("Failed to construct renderer");
         for page in &pending_pages {
             self.link_file(evaluator, page, &mut renderer)
                 .expect("Failed to link page");
@@ -221,8 +226,8 @@ impl Project {
 }
 
 fn main() {
-    let mut config = Project::read_toml(Path::new("config.toml"))
-        .expect("Failed to open config.toml");
+    let mut config =
+        Project::read_toml(Path::new("config.toml")).expect("Failed to open config.toml");
 
     {
         let mut ap = ArgumentParser::new();
@@ -244,13 +249,19 @@ fn main() {
     evaluator.register("md", Rc::new(directives::Markdown::new()));
     evaluator.register("table", Rc::new(directives::Dummy::new()));
     evaluator.register("version", Rc::new(directives::Version::new("3.4.0")));
-    evaluator.register("note",
-                       Rc::new(directives::Admonition::new("Note", "note")));
-    evaluator.register("warning",
-                       Rc::new(directives::Admonition::new("Warning", "warning")));
-    evaluator.register("define-template", Rc::new(directives::DefineTemplate::new()));
-    evaluator.register("definition-list",
-                       Rc::new(directives::DefinitionList::new()));
+    evaluator.register("note", Rc::new(directives::Admonition::new("Note", "note")));
+    evaluator.register(
+        "warning",
+        Rc::new(directives::Admonition::new("Warning", "warning")),
+    );
+    evaluator.register(
+        "define-template",
+        Rc::new(directives::DefineTemplate::new()),
+    );
+    evaluator.register(
+        "definition-list",
+        Rc::new(directives::DefinitionList::new()),
+    );
     evaluator.register("concat", Rc::new(directives::Concat::new()));
     evaluator.register("include", Rc::new(directives::Include::new()));
     evaluator.register("import", Rc::new(directives::Import::new()));
@@ -273,6 +284,8 @@ fn main() {
     let start_time = time::precise_time_ns();
     config.build_project(&mut evaluator);
 
-    info!("Took {} seconds",
-          (time::precise_time_ns() - start_time) as f64 / (f64::from(1_000_000_000)));
+    info!(
+        "Took {} seconds",
+        (time::precise_time_ns() - start_time) as f64 / (f64::from(1_000_000_000))
+    );
 }

@@ -1,4 +1,4 @@
-use comrak::nodes::{TableAlignment, NodeValue, ListType, AstNode};
+use comrak::nodes::{AstNode, ListType, NodeValue, TableAlignment};
 use comrak;
 use typed_arena::Arena;
 
@@ -174,39 +174,33 @@ impl<'o> HtmlFormatter<'o> {
     fn format_node<'a>(&mut self, node: &'a AstNode<'a>, entering: bool) -> bool {
         match node.data.borrow().value {
             NodeValue::Document => (),
-            NodeValue::BlockQuote => {
-                if entering {
-                    self.cr();
-                    self.append_html("<blockquote>\n");
+            NodeValue::BlockQuote => if entering {
+                self.cr();
+                self.append_html("<blockquote>\n");
+            } else {
+                self.cr();
+                self.append_html("</blockquote>\n");
+            },
+            NodeValue::List(ref nl) => if entering {
+                self.cr();
+                if nl.list_type == ListType::Bullet {
+                    self.append_html("<ul>\n");
+                } else if nl.start == 1 {
+                    self.append_html("<ol>\n");
                 } else {
-                    self.cr();
-                    self.append_html("</blockquote>\n");
+                    self.s += &format!("<ol start=\"{}\">\n", nl.start);
                 }
-            }
-            NodeValue::List(ref nl) => {
-                if entering {
-                    self.cr();
-                    if nl.list_type == ListType::Bullet {
-                        self.append_html("<ul>\n");
-                    } else if nl.start == 1 {
-                        self.append_html("<ol>\n");
-                    } else {
-                        self.s += &format!("<ol start=\"{}\">\n", nl.start);
-                    }
-                } else if nl.list_type == ListType::Bullet {
-                    self.append_html("</ul>\n");
-                } else {
-                    self.append_html("</ol>\n");
-                }
-            }
-            NodeValue::Item(..) => {
-                if entering {
-                    self.cr();
-                    self.append_html("<li>");
-                } else {
-                    self.append_html("</li>\n");
-                }
-            }
+            } else if nl.list_type == ListType::Bullet {
+                self.append_html("</ul>\n");
+            } else {
+                self.append_html("</ol>\n");
+            },
+            NodeValue::Item(..) => if entering {
+                self.cr();
+                self.append_html("<li>");
+            } else {
+                self.append_html("</li>\n");
+            },
             NodeValue::Heading(ref nch) => {
                 let prefix = if nch.level <= self.last_level {
                     "\n</section>".repeat((self.last_level - nch.level + 1) as usize)
@@ -231,55 +225,50 @@ impl<'o> HtmlFormatter<'o> {
                     self.append_html(&format!("</h{}>\n", nch.level));
                 }
             }
-            NodeValue::CodeBlock(ref ncb) => {
-                if entering {
-                    self.cr();
+            NodeValue::CodeBlock(ref ncb) => if entering {
+                self.cr();
 
-                    if ncb.info.is_empty() {
-                        self.append_html("<pre><code>");
-                        self.escape(&ncb.literal);
-                    } else {
-                        let mut first_tag = 0;
-                        while first_tag < ncb.info.len() &&
-                              !isspace(ncb.info.as_bytes()[first_tag]) {
-                            first_tag += 1;
-                        }
-
-                        self.append_html("<pre lang=\"");
-                        self.escape(&ncb.info[..first_tag]);
-                        self.append_html("\"><code>");
-
-                        match self.highlighter
-                                  .highlight(&ncb.info[..first_tag], &ncb.literal) {
-                            Ok(s) => {
-                                self.s += &s;
-                            }
-                            Err(_) => {
-                                self.escape(&ncb.literal);
-                            }
-                        }
+                if ncb.info.is_empty() {
+                    self.append_html("<pre><code>");
+                    self.escape(&ncb.literal);
+                } else {
+                    let mut first_tag = 0;
+                    while first_tag < ncb.info.len() && !isspace(ncb.info.as_bytes()[first_tag]) {
+                        first_tag += 1;
                     }
 
-                    self.append_html("</code></pre>\n");
+                    self.append_html("<pre lang=\"");
+                    self.escape(&ncb.info[..first_tag]);
+                    self.append_html("\"><code>");
+
+                    match self.highlighter
+                        .highlight(&ncb.info[..first_tag], &ncb.literal)
+                    {
+                        Ok(s) => {
+                            self.s += &s;
+                        }
+                        Err(_) => {
+                            self.escape(&ncb.literal);
+                        }
+                    }
                 }
-            }
-            NodeValue::HtmlBlock(ref nhb) => {
-                if entering {
-                    self.cr();
-                    self.s += &nhb.literal;
-                    self.cr();
-                }
-            }
-            NodeValue::ThematicBreak => {
-                if entering {
-                    self.cr();
-                    self.append_html("<hr />\n");
-                }
-            }
+
+                self.append_html("</code></pre>\n");
+            },
+            NodeValue::HtmlBlock(ref nhb) => if entering {
+                self.cr();
+                self.s += &nhb.literal;
+                self.cr();
+            },
+            NodeValue::ThematicBreak => if entering {
+                self.cr();
+                self.append_html("<hr />\n");
+            },
             NodeValue::Paragraph => {
                 let tight = match node.parent()
-                          .and_then(|n| n.parent())
-                          .map(|n| n.data.borrow().value.clone()) {
+                    .and_then(|n| n.parent())
+                    .map(|n| n.data.borrow().value.clone())
+                {
                     Some(NodeValue::List(nl)) => nl.tight,
                     _ => false,
                 };
@@ -293,124 +282,99 @@ impl<'o> HtmlFormatter<'o> {
                     self.append_html("</p>\n");
                 }
             }
-            NodeValue::Text(ref literal) => {
-                if entering {
-                    self.escape(literal);
-                }
-            }
-            NodeValue::LineBreak => {
-                if entering {
+            NodeValue::Text(ref literal) => if entering {
+                self.escape(literal);
+            },
+            NodeValue::LineBreak => if entering {
+                self.append_html("<br />\n");
+            },
+            NodeValue::SoftBreak => if entering {
+                if self.options.hardbreaks {
                     self.append_html("<br />\n");
-                }
-            }
-            NodeValue::SoftBreak => {
-                if entering {
-                    if self.options.hardbreaks {
-                        self.append_html("<br />\n");
-                    } else {
-                        self.append_html("\n");
-                    }
-                }
-            }
-            NodeValue::Code(ref literal) => {
-                if entering {
-                    self.append_html("<code>");
-                    self.escape(literal);
-                    self.append_html("</code>");
-                }
-            }
-            NodeValue::HtmlInline(ref literal) => {
-                if entering {
-                    self.append_html(literal);
-                }
-            }
-            NodeValue::Strong => {
-                if entering {
-                    self.append_html("<strong>");
                 } else {
-                    self.append_html("</strong>");
+                    self.append_html("\n");
                 }
-            }
-            NodeValue::Emph => {
-                if entering {
-                    self.append_html("<em>");
-                } else {
-                    self.append_html("</em>");
+            },
+            NodeValue::Code(ref literal) => if entering {
+                self.append_html("<code>");
+                self.escape(literal);
+                self.append_html("</code>");
+            },
+            NodeValue::HtmlInline(ref literal) => if entering {
+                self.append_html(literal);
+            },
+            NodeValue::Strong => if entering {
+                self.append_html("<strong>");
+            } else {
+                self.append_html("</strong>");
+            },
+            NodeValue::Emph => if entering {
+                self.append_html("<em>");
+            } else {
+                self.append_html("</em>");
+            },
+            NodeValue::Strikethrough => if entering {
+                self.append_html("<del>");
+            } else {
+                self.append_html("</del>");
+            },
+            NodeValue::Superscript => if entering {
+                self.append_html("<sup>");
+            } else {
+                self.append_html("</sup>");
+            },
+            NodeValue::Link(ref nl) => if entering {
+                self.append_html("<a href=\"");
+                self.escape_href(&nl.url);
+                if !nl.title.is_empty() {
+                    self.append_html("\" title=\"");
+                    self.escape(&nl.title);
                 }
-            }
-            NodeValue::Strikethrough => {
-                if entering {
-                    self.append_html("<del>");
-                } else {
-                    self.append_html("</del>");
+                self.append_html("\">");
+            } else {
+                self.append_html("</a>");
+            },
+            NodeValue::Image(ref nl) => if entering {
+                self.append_html("<img src=\"");
+                self.escape_href(&nl.url);
+                self.append_html("\" alt=\"");
+                return true;
+            } else {
+                if !nl.title.is_empty() {
+                    self.append_html("\" title=\"");
+                    self.escape(&nl.title);
                 }
-            }
-            NodeValue::Superscript => {
-                if entering {
-                    self.append_html("<sup>");
-                } else {
-                    self.append_html("</sup>");
+                self.append_html("\" />");
+            },
+            NodeValue::Table(..) => if entering {
+                self.cr();
+                self.append_html("<table>\n");
+            } else {
+                if !node.last_child()
+                    .unwrap()
+                    .same_node(node.first_child().unwrap())
+                {
+                    self.append_html("</tbody>");
                 }
-            }
-            NodeValue::Link(ref nl) => {
-                if entering {
-                    self.append_html("<a href=\"");
-                    self.escape_href(&nl.url);
-                    if !nl.title.is_empty() {
-                        self.append_html("\" title=\"");
-                        self.escape(&nl.title);
-                    }
-                    self.append_html("\">");
-                } else {
-                    self.append_html("</a>");
-                }
-            }
-            NodeValue::Image(ref nl) => {
-                if entering {
-                    self.append_html("<img src=\"");
-                    self.escape_href(&nl.url);
-                    self.append_html("\" alt=\"");
-                    return true;
-                } else {
-                    if !nl.title.is_empty() {
-                        self.append_html("\" title=\"");
-                        self.escape(&nl.title);
-                    }
-                    self.append_html("\" />");
-                }
-            }
-            NodeValue::Table(..) => {
-                if entering {
+                self.append_html("</table>\n");
+            },
+            NodeValue::TableRow(header) => if entering {
+                self.cr();
+                if header {
+                    self.append_html("<thead>");
                     self.cr();
-                    self.append_html("<table>\n");
-                } else {
-                    if !node.last_child()
-                            .unwrap()
-                            .same_node(node.first_child().unwrap()) {
-                        self.append_html("</tbody>");
-                    }
-                    self.append_html("</table>\n");
                 }
-            }
-            NodeValue::TableRow(header) => {
-                if entering {
+                self.append_html("<tr>");
+            } else {
+                self.cr();
+                self.append_html("</tr>");
+                if header {
                     self.cr();
-                    if header {
-                        self.append_html("<thead>");
-                        self.cr();
-                    }
-                    self.append_html("<tr>");
-                } else {
+                    self.append_html("</thead>");
                     self.cr();
-                    self.append_html("</tr>");
-                    if header {
-                        self.cr();
-                        self.append_html("</thead>");
-                        self.cr();
-                        self.append_html("<tbody>");
-                    }
+                    self.append_html("<tbody>");
                 }
-            }
+            },
             NodeValue::TableCell => {
                 let row = &node.parent().unwrap().data.borrow().value;
                 let in_header = match *row {
