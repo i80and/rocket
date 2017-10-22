@@ -109,13 +109,14 @@ impl<'a> Renderer<'a> {
     pub fn render(&mut self,
                   template_name: &str,
                   project_args: &serde_json::map::Map<String, serde_json::Value>,
-                  page: &Page)
+                  page: &Page,
+                  body: &str)
                   -> Result<String, handlebars::RenderError> {
         let ctx = json!({
             "page": &page.theme_config,
             "project": project_args,
             "theme": self.constants,
-            "body": &page.body,
+            "body": body,
         });
 
         let helper = TocTreeHelper {

@@ -1,4 +1,4 @@
-# Tutorials
+(:h1 Tutorials)
 
 (:toctree
   "tutorials/writing-your-first-project")

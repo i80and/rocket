@@ -1,10 +1,12 @@
 (:import prelude.rock)
 
-# Home
+(:h1 home Home)
 
 Rocket is a fast, powerful, and homoiconic text (:wikipedia markup
 Markup_language) format with tight integration with
 [Markdown](https://daringfireball.net/projects/markdown/).
+
+Example ref: (:ref writing-your-first-project).
 
 (:toctree
   "reference"

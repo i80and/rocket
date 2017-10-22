@@ -5,7 +5,7 @@ use regex::{Captures, Regex};
 use serde_json;
 use parse::{Node, NodeValue};
 use page::Slug;
-use evaluator::Evaluator;
+use evaluator::{Evaluator, RefDef, PlaceholderAction};
 
 fn consume_string(iter: &mut slice::Iter<Node>, evaluator: &mut Evaluator) -> Option<String> {
     match iter.next() {
@@ -494,6 +494,93 @@ impl DirectiveHandler for TocTree {
     }
 }
 
+pub struct Heading {
+    level: &'static str,
+}
+
+impl Heading {
+    pub fn new(level: u8) -> Self {
+        let level = match level {
+            1 => "#",
+            2 => "##",
+            3 => "###",
+            4 => "####",
+            5 => "#####",
+            6 => "######",
+            _ => panic!("Unknown heading level"),
+        };
+
+        Heading {level}
+    }
+}
+
+impl DirectiveHandler for Heading {
+    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+        let mut iter = args.iter();
+        let arg1 = match consume_string(&mut iter, evaluator) {
+            Some(t) => t,
+            None => return Err(()),
+        };
+
+        let arg2 = consume_string(&mut iter, evaluator);
+
+        match arg2 {
+            Some(title) => {
+                let refdef = RefDef::new(&title, evaluator.get_slug());
+                evaluator.refdefs.insert(arg1, refdef);
+                Ok(format!("\n{} {}\n", self.level, title))
+            },
+            None => {
+                Ok(format!("\n{} {}\n", self.level, arg1))
+            }
+        }
+
+    }
+}
+
+pub struct RefDefDirective;
+
+impl DirectiveHandler for RefDefDirective {
+    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+        let mut iter = args.iter();
+        let id = match consume_string(&mut iter, evaluator) {
+            Some(t) => t,
+            None => return Err(()),
+        };
+
+        let title = match consume_string(&mut iter, evaluator) {
+            Some(t) => t,
+            None => return Err(()),
+        };
+
+        let refdef = RefDef::new(&title, evaluator.get_slug());
+        evaluator.refdefs.insert(id, refdef);
+
+        Ok(String::new())
+    }
+}
+
+pub struct RefDirective;
+
+impl DirectiveHandler for RefDirective {
+    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+        let mut iter = args.iter();
+        let refid = match consume_string(&mut iter, evaluator) {
+            Some(t) => t,
+            None => return Err(()),
+        };
+
+        let title = match consume_string(&mut iter, evaluator) {
+            Some(t) => t,
+            None => evaluator.get_placeholder(refid.to_owned(), PlaceholderAction::Title),
+        };
+
+        let placeholder = evaluator.get_placeholder(refid, PlaceholderAction::Path);
+
+        Ok(format!("[{}]({})", title, placeholder))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -663,5 +750,32 @@ mod tests {
                    Ok("".to_owned()));
         assert_eq!(evaluator.theme_config.get("foo"),
                    Some(&serde_json::Value::String("bar".to_owned())));
+    }
+
+    #[test]
+    fn test_heading() {
+        let mut evaluator = Evaluator::new();
+        evaluator.set_slug(Slug::new("index".to_owned()));
+        let handler = Heading::new(2);
+
+        assert!(handler.handle(&mut evaluator, &[]).is_err());
+        assert_eq!(handler.handle(&mut evaluator,
+                                  &[Node::new_string("a-title"), Node::new_string("A Title")]),
+                   Ok("\n## A Title\n".to_owned()));
+        assert_eq!(evaluator.refdefs.get("a-title").unwrap().title, "A Title".to_owned());
+    }
+
+    #[test]
+    fn test_refdef() {
+        let mut evaluator = Evaluator::new();
+        evaluator.set_slug(Slug::new("index".to_owned()));
+        let handler = RefDefDirective;
+
+        assert!(handler.handle(&mut evaluator, &[]).is_err());
+        assert!(handler.handle(&mut evaluator, &[Node::new_string("a-title")]).is_err());
+        assert_eq!(handler.handle(&mut evaluator,
+                                  &[Node::new_string("a-title"), Node::new_string("A Title")]),
+                   Ok(String::new()));
+        assert_eq!(evaluator.refdefs.get("a-title").unwrap().title, "A Title".to_owned());
     }
 }

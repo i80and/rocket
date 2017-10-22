@@ -32,6 +32,11 @@ impl Slug {
 
         self.slug.matches('/').count() + modifier
     }
+
+    pub fn path_to(&self, dest: &Slug, pretty_url: bool) -> String {
+        let slug_prefix = "../".repeat(self.depth(pretty_url));
+        format!("{}{}", slug_prefix, &dest.slug)
+    }
 }
 
 impl fmt::Display for Slug {

@@ -13,6 +13,7 @@ extern crate serde_derive;
 extern crate serde_json;
 extern crate simple_logger;
 extern crate syntect;
+extern crate rand;
 extern crate regex;
 extern crate time;
 extern crate toml;
@@ -43,6 +44,7 @@ use toctree::TocTree;
 
 #[derive(Debug)]
 enum LinkError {
+    UndefinedReference,
     TemplateError(handlebars::RenderError),
     IOError(io::Error),
 }
@@ -125,8 +127,8 @@ impl Project {
            })
     }
 
-    fn build_file(&self, evaluator: &mut Evaluator, slug: &Slug, path: &Path) -> Result<Page, ()> {
-        debug!("Compiling {}", slug);
+    fn build_file(&self, evaluator: &mut Evaluator, path: &Path) -> Result<Page, ()> {
+        debug!("Compiling {}", evaluator.get_slug());
 
         let node = match evaluator.parser.parse(path) {
             Ok(n) => n,
@@ -140,7 +142,7 @@ impl Project {
 
         let page = Page {
             source_path: path.to_owned(),
-            slug: slug.clone(),
+            slug: evaluator.get_slug().clone(),
             body: output,
             theme_config: evaluator.theme_config.clone(),
         };
@@ -149,7 +151,7 @@ impl Project {
         Ok(page)
     }
 
-    fn link_file(&self, page: &Page, renderer: &mut theme::Renderer) -> Result<(), LinkError> {
+    fn link_file(&self, evaluator: &Evaluator, page: &Page, renderer: &mut theme::Renderer) -> Result<(), LinkError> {
         debug!("Linking {}", &page.slug);
 
         // Find the template that matches this path
@@ -159,7 +161,14 @@ impl Project {
             .map(|&(_, ref name)| name.as_ref())
             .unwrap_or("default");
 
-        let rendered = renderer.render(template_name, &self.theme_constants, page)?;
+        let new_body = match evaluator.substitute(page) {
+            Ok(s) => s,
+            Err(_) => {
+                return Err(LinkError::UndefinedReference);
+            }
+        };
+
+        let rendered = renderer.render(template_name, &self.theme_constants, page, &new_body)?;
         let output_path = page.slug.create_output_path(&self.output, self.pretty_url);
         let output_dir = output_path.parent().expect("Couldn't get output directory");
 
@@ -186,9 +195,9 @@ impl Project {
             let dir = slug.parent().unwrap();
             let stem = slug.file_stem().unwrap();
             let slug = Slug::new(dir.join(stem).to_string_lossy().as_ref().to_owned());
+            evaluator.set_slug(slug);
 
-            evaluator.set_slug(slug.clone());
-            match self.build_file(evaluator, &slug, path) {
+            match self.build_file(evaluator, path) {
                 Ok(page) => {
                     titles.insert(page.slug.to_owned(), page.title());
                     pending_pages.push(page);
@@ -205,7 +214,7 @@ impl Project {
         let mut renderer = theme::Renderer::new(&self.theme, toctree)
             .expect("Failed to construct renderer");
         for page in &pending_pages {
-            self.link_file(page, &mut renderer)
+            self.link_file(evaluator, page, &mut renderer)
                 .expect("Failed to link page");
         }
     }
@@ -251,6 +260,15 @@ fn main() {
     evaluator.register("get", Rc::new(directives::Get::new()));
     evaluator.register("theme-config", Rc::new(directives::ThemeConfig::new()));
     evaluator.register("toctree", Rc::new(directives::TocTree::new()));
+    evaluator.register("define-ref", Rc::new(directives::RefDefDirective));
+    evaluator.register("ref", Rc::new(directives::RefDirective));
+
+    evaluator.register("h1", Rc::new(directives::Heading::new(1)));
+    evaluator.register("h2", Rc::new(directives::Heading::new(2)));
+    evaluator.register("h3", Rc::new(directives::Heading::new(3)));
+    evaluator.register("h4", Rc::new(directives::Heading::new(4)));
+    evaluator.register("h5", Rc::new(directives::Heading::new(5)));
+    evaluator.register("h6", Rc::new(directives::Heading::new(6)));
 
     let start_time = time::precise_time_ns();
     config.build_project(&mut evaluator);

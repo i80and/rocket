@@ -63,16 +63,13 @@ impl TocTree {
         };
 
         let mut result = vec![];
-
-        let slug_prefix = "../".repeat(current_slug.depth(self.pretty_url));
         result.push(Cow::Borrowed("<ul>"));
 
         if is_root {
             result.push(Cow::Borrowed(r#"<li class="current">"#));
             let title = self.titles.get(&self.root).ok_or_else(|| format!("Failed to find toctree root '{}'", &self.root))?;
-            result.push(Cow::Owned(format!(r#"<a href="{}{}">{}</a>"#,
-                                           slug_prefix,
-                                           Slug::new("".to_owned()),
+            result.push(Cow::Owned(format!(r#"<a href="{}">{}</a>"#,
+                                           current_slug.path_to(&Slug::new("".to_owned()), self.pretty_url),
                                            title)));
             result.push(Cow::Borrowed("</li>"));
         }
@@ -93,9 +90,8 @@ impl TocTree {
                 }
             };
 
-            result.push(Cow::Owned(format!(r#"<a href="{}{}">{}</a>"#,
-                                           slug_prefix,
-                                           child.slug,
+            result.push(Cow::Owned(format!(r#"<a href="{}">{}</a>"#,
+                                           current_slug.path_to(&child.slug, self.pretty_url),
                                            title)));
             result.extend(self.generate_html(&child.slug, current_slug, false)?);
             result.push(Cow::Borrowed("</li>"));
