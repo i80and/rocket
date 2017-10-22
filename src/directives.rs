@@ -24,12 +24,6 @@ pub trait DirectiveHandler {
 
 pub struct Dummy;
 
-impl Dummy {
-    pub fn new() -> Dummy {
-        Dummy
-    }
-}
-
 impl DirectiveHandler for Dummy {
     #[allow(unused_variables)]
     fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
@@ -106,12 +100,6 @@ impl DirectiveHandler for Admonition {
 
 pub struct Concat;
 
-impl Concat {
-    pub fn new() -> Concat {
-        Concat
-    }
-}
-
 impl DirectiveHandler for Concat {
     fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
         Ok(
@@ -123,12 +111,6 @@ impl DirectiveHandler for Concat {
 }
 
 pub struct Markdown;
-
-impl Markdown {
-    pub fn new() -> Markdown {
-        Markdown
-    }
-}
 
 impl DirectiveHandler for Markdown {
     fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
@@ -205,12 +187,6 @@ impl DirectiveHandler for Template {
 
 pub struct DefineTemplate;
 
-impl DefineTemplate {
-    pub fn new() -> Self {
-        DefineTemplate
-    }
-}
-
 impl DirectiveHandler for DefineTemplate {
     fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
         let mut iter = args.iter();
@@ -245,12 +221,6 @@ impl DirectiveHandler for DefineTemplate {
 
 pub struct DefinitionList;
 
-impl DefinitionList {
-    pub fn new() -> DefinitionList {
-        DefinitionList
-    }
-}
-
 impl DirectiveHandler for DefinitionList {
     fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
         let segments: Result<Vec<_>, _> = args.iter()
@@ -277,12 +247,6 @@ impl DirectiveHandler for DefinitionList {
 }
 
 pub struct Include;
-
-impl Include {
-    pub fn new() -> Include {
-        Include
-    }
-}
 
 impl DirectiveHandler for Include {
     fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
@@ -312,15 +276,9 @@ impl DirectiveHandler for Include {
 
 pub struct Import;
 
-impl Import {
-    pub fn new() -> Import {
-        Import
-    }
-}
-
 impl DirectiveHandler for Import {
     fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
-        let include = Include::new();
+        let include = Include;
         include.handle(evaluator, args)?;
 
         Ok("".to_owned())
@@ -366,7 +324,7 @@ impl DirectiveHandler for Let {
             }
         }
 
-        let concat = Concat::new();
+        let concat = Concat;
         let result = concat.handle(evaluator, &args[1..]);
 
         for (key, original_value) in variables {
@@ -382,12 +340,6 @@ impl DirectiveHandler for Let {
 
 pub struct Define;
 
-impl Define {
-    pub fn new() -> Define {
-        Define
-    }
-}
-
 impl DirectiveHandler for Define {
     fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
         if args.len() != 2 {
@@ -402,12 +354,6 @@ impl DirectiveHandler for Define {
 }
 
 pub struct Get;
-
-impl Get {
-    pub fn new() -> Get {
-        Get
-    }
-}
 
 impl DirectiveHandler for Get {
     fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
@@ -431,12 +377,6 @@ impl DirectiveHandler for Get {
 
 pub struct ThemeConfig;
 
-impl ThemeConfig {
-    pub fn new() -> ThemeConfig {
-        ThemeConfig
-    }
-}
-
 impl DirectiveHandler for ThemeConfig {
     fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
         if args.len() % 2 != 0 {
@@ -457,12 +397,6 @@ impl DirectiveHandler for ThemeConfig {
 }
 
 pub struct TocTree;
-
-impl TocTree {
-    pub fn new() -> TocTree {
-        TocTree
-    }
-}
 
 impl DirectiveHandler for TocTree {
     fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
@@ -585,7 +519,7 @@ mod tests {
     #[test]
     fn test_dummy() {
         let mut evaluator = Evaluator::new();
-        let handler = Dummy::new();
+        let handler = Dummy;
 
         assert_eq!(handler.handle(&mut evaluator, &[]), Ok("".to_owned()));
         assert_eq!(
@@ -604,7 +538,7 @@ mod tests {
     #[test]
     fn test_version() {
         let mut evaluator = Evaluator::new();
-        evaluator.register("concat", Rc::new(Concat::new()));
+        evaluator.register("concat", Rc::new(Concat));
         let handler = Version::new("3.4.0");
 
         assert_eq!(handler.handle(&mut evaluator, &[]), Ok("3.4.0".to_owned()));
@@ -653,7 +587,7 @@ mod tests {
     fn test_concat() {
         let mut evaluator = Evaluator::new();
         evaluator.register("version", Rc::new(Version::new("3.4")));
-        let handler = Concat::new();
+        let handler = Concat;
 
         assert_eq!(handler.handle(&mut evaluator, &[]), Ok("".to_owned()));
         assert_eq!(
@@ -687,7 +621,7 @@ mod tests {
     #[test]
     fn test_markdown() {
         let mut evaluator = Evaluator::new();
-        let handler = Markdown::new();
+        let handler = Markdown;
 
         assert_eq!(handler.handle(&mut evaluator, &[]), Ok("".to_owned()));
         assert_eq!(
@@ -716,7 +650,7 @@ mod tests {
         let mut evaluator = Evaluator::new();
         let handler = Let;
 
-        evaluator.register("concat", Rc::new(Concat::new()));
+        evaluator.register("concat", Rc::new(Concat));
 
         assert!(handler.handle(&mut evaluator, &[]).is_err());
         let result = handler.handle(
@@ -743,8 +677,8 @@ mod tests {
     #[test]
     fn test_define() {
         let mut evaluator = Evaluator::new();
-        evaluator.register("concat", Rc::new(Concat::new()));
-        let handler = Define::new();
+        evaluator.register("concat", Rc::new(Concat));
+        let handler = Define;
 
         assert!(handler.handle(&mut evaluator, &[]).is_err());
         assert_eq!(
@@ -775,8 +709,8 @@ mod tests {
     #[test]
     fn test_get() {
         let mut evaluator = Evaluator::new();
-        evaluator.register("concat", Rc::new(Concat::new()));
-        let handler = Get::new();
+        evaluator.register("concat", Rc::new(Concat));
+        let handler = Get;
 
         evaluator.ctx.insert(
             "foo".to_owned(),
@@ -796,7 +730,7 @@ mod tests {
     #[test]
     fn test_theme_config() {
         let mut evaluator = Evaluator::new();
-        let handler = ThemeConfig::new();
+        let handler = ThemeConfig;
 
         assert_eq!(handler.handle(&mut evaluator, &[]), Ok("".to_owned()));
         assert_eq!(

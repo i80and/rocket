@@ -246,31 +246,25 @@ fn main() {
     simple_logger::init_with_level(loglevel).expect("Failed to initialize logger");
 
     let mut evaluator = Evaluator::new_with_options(&config.syntax_theme);
-    evaluator.register("md", Rc::new(directives::Markdown::new()));
-    evaluator.register("table", Rc::new(directives::Dummy::new()));
+    evaluator.register("md", Rc::new(directives::Markdown));
+    evaluator.register("table", Rc::new(directives::Dummy));
     evaluator.register("version", Rc::new(directives::Version::new("3.4.0")));
     evaluator.register("note", Rc::new(directives::Admonition::new("Note", "note")));
     evaluator.register(
         "warning",
         Rc::new(directives::Admonition::new("Warning", "warning")),
     );
-    evaluator.register(
-        "define-template",
-        Rc::new(directives::DefineTemplate::new()),
-    );
-    evaluator.register(
-        "definition-list",
-        Rc::new(directives::DefinitionList::new()),
-    );
-    evaluator.register("concat", Rc::new(directives::Concat::new()));
-    evaluator.register("include", Rc::new(directives::Include::new()));
-    evaluator.register("import", Rc::new(directives::Import::new()));
-    evaluator.register("null", Rc::new(directives::Dummy::new()));
+    evaluator.register("define-template", Rc::new(directives::DefineTemplate));
+    evaluator.register("definition-list", Rc::new(directives::DefinitionList));
+    evaluator.register("concat", Rc::new(directives::Concat));
+    evaluator.register("include", Rc::new(directives::Include));
+    evaluator.register("import", Rc::new(directives::Import));
+    evaluator.register("null", Rc::new(directives::Dummy));
     evaluator.register("let", Rc::new(directives::Let));
-    evaluator.register("define", Rc::new(directives::Define::new()));
-    evaluator.register("get", Rc::new(directives::Get::new()));
-    evaluator.register("theme-config", Rc::new(directives::ThemeConfig::new()));
-    evaluator.register("toctree", Rc::new(directives::TocTree::new()));
+    evaluator.register("define", Rc::new(directives::Define));
+    evaluator.register("get", Rc::new(directives::Get));
+    evaluator.register("theme-config", Rc::new(directives::ThemeConfig));
+    evaluator.register("toctree", Rc::new(directives::TocTree));
     evaluator.register("define-ref", Rc::new(directives::RefDefDirective));
     evaluator.register("ref", Rc::new(directives::RefDirective));
 
