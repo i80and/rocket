@@ -120,7 +120,7 @@ impl<'a> Renderer<'a> {
         });
 
         let helper = TocTreeHelper {
-            toctree: self.toctree.clone(),
+            toctree: Arc::clone(&self.toctree),
             current_slug: page.slug.to_owned(),
         };
         self.handlebars.register_helper("toctree", Box::new(helper));

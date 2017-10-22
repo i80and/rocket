@@ -274,5 +274,5 @@ fn main() {
     config.build_project(&mut evaluator);
 
     info!("Took {} seconds",
-          (time::precise_time_ns() - start_time) as f64 / (1_000_000_000 as f64));
+          (time::precise_time_ns() - start_time) as f64 / (f64::from(1_000_000_000)));
 }

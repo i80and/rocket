@@ -57,11 +57,11 @@ impl Evaluator {
     }
 
     pub fn new_with_options(syntax_theme: &str) -> Self {
-        let hex_chars = "0123456789abcdef".as_bytes();
+        let hex_chars = b"0123456789abcdef";
         let mut rnd_buf = [0u8; 16];
         rand::thread_rng().fill_bytes(&mut rnd_buf);
         let mut placeholder_prefix = String::with_capacity(32);
-        for c in rnd_buf.iter() {
+        for c in &rnd_buf {
             placeholder_prefix.push(hex_chars[(c >> 4) as usize] as char);
             placeholder_prefix.push(hex_chars[(c & 15) as usize] as char);
         }
@@ -158,13 +158,13 @@ impl Evaluator {
             let refdef = match self.refdefs.get(refid) {
                 Some(r) => r,
                 None => {
-                    return format!("unknown refdef");
+                    return "unknown refdef".to_owned();
                 },
             };
 
-            match action {
-                &PlaceholderAction::Path => page.slug.path_to(&refdef.slug, true),
-                &PlaceholderAction::Title => refdef.title.to_owned(),
+            match *action {
+                PlaceholderAction::Path => page.slug.path_to(&refdef.slug, true),
+                PlaceholderAction::Title => refdef.title.to_owned(),
             }
         });
 
@@ -187,19 +187,19 @@ impl Evaluator {
         }
 
         let handler = match self.directives.get(key) {
-            Some(handler) => handler.clone(),
+            Some(handler) => Rc::clone(handler),
             None => {
                 self.error(node, &format!("Unknown directive {}", key));
                 return Err(());
             }
         };
 
-        return match handler.handle(self, args) {
+        match handler.handle(self, args) {
             Ok(result) => Ok(result),
             Err(_) => {
                 self.error(node, &format!("Error in directive {}", key));
                 Err(())
             }
-        };
+        }
     }
 }

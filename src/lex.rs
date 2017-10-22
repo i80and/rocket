@@ -25,7 +25,7 @@ pub enum Token<'a> {
     Quote,
 }
 
-pub fn lex<'a>(data: &'a str) -> Vec<Token> {
+pub fn lex(data: &str) -> Vec<Token> {
     let mut tokens: Vec<Token> = vec![];
     let mut indent: Vec<usize> = vec![0];
     let mut start_rocket = false;

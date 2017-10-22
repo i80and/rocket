@@ -15,7 +15,7 @@ fn consume_string(iter: &mut slice::Iter<Node>, evaluator: &mut Evaluator) -> Op
                 NodeValue::Children(_) => Some(evaluator.evaluate(n)),
             }
         },
-        None => return None,
+        None => None,
     }
 }
 
@@ -158,9 +158,9 @@ impl Template {
 
 impl DirectiveHandler for Template {
     fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
-        let checkers = self.checkers.iter().map(|checker| Some(checker)).chain(iter::repeat(None));
+        let checkers = self.checkers.iter().map(Some).chain(iter::repeat(None));
 
-        let args: Result<Vec<String>, ()> = args.iter().map(|ref node| {
+        let args: Result<Vec<String>, ()> = args.iter().map(|node| {
             match node.value {
                 NodeValue::Owned(ref s) => s.to_owned(),
                 NodeValue::Children(_) => evaluator.evaluate(node),
@@ -220,7 +220,7 @@ impl DirectiveHandler for DefineTemplate {
             None => return Err(()),
         };
 
-        let checkers: Result<Vec<Regex>, ()> = iter.map(|ref node| {
+        let checkers: Result<Vec<Regex>, ()> = iter.map(|node| {
             let pattern_string = match node.value {
                 NodeValue::Owned(ref s) => s.to_owned(),
                 NodeValue::Children(_) => evaluator.evaluate(node),
