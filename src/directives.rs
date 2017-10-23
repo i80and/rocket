@@ -190,15 +190,8 @@ pub struct DefineTemplate;
 impl DirectiveHandler for DefineTemplate {
     fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
         let mut iter = args.iter();
-        let name = match consume_string(&mut iter, evaluator) {
-            Some(s) => s,
-            None => return Err(()),
-        };
-
-        let template_text = match consume_string(&mut iter, evaluator) {
-            Some(s) => s,
-            None => return Err(()),
-        };
+        let name = consume_string(&mut iter, evaluator).ok_or(())?;
+        let template_text = consume_string(&mut iter, evaluator).ok_or(())?;
 
         let checkers: Result<Vec<Regex>, ()> = iter.map(|node| {
             let pattern_string = match node.value {
@@ -344,16 +337,36 @@ pub struct Define;
 
 impl DirectiveHandler for Define {
     fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
-        if args.len() != 2 {
+        let mut iter = args.iter();
+        let arg1 = consume_string(&mut iter, evaluator).ok_or(())?;
+        let arg2 = iter.next().ok_or(())?;
+        let arg3 = iter.next();
+
+        if iter.next().is_some() {
             return Err(());
         }
 
-        let key = evaluator.evaluate(&args[0]);
-        let value = Rc::new(StoredValue::Node(
-            Node::new(args[1].value.clone(), args[1].file_id),
-        ));
+        let (eager, key, value_node) = match arg3 {
+            Some(value) => {
+                if arg1 != "evaluate" {
+                    return Err(());
+                }
 
-        evaluator.ctx.insert(key.to_owned(), value);
+                (true, evaluator.evaluate(arg2), value)
+            }
+            None => (false, arg1, arg2),
+        };
+
+        let value = if eager {
+            let evaluated = evaluator.evaluate(value_node);
+            Node::new(NodeValue::Owned(evaluated), value_node.file_id)
+        } else {
+            Node::new(value_node.value.clone(), value_node.file_id)
+        };
+
+        evaluator
+            .ctx
+            .insert(key.to_owned(), Rc::new(StoredValue::Node(value)));
         Ok("".to_owned())
     }
 }
@@ -434,11 +447,7 @@ impl Heading {
 impl DirectiveHandler for Heading {
     fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
         let mut iter = args.iter();
-        let arg1 = match consume_string(&mut iter, evaluator) {
-            Some(t) => t,
-            None => return Err(()),
-        };
-
+        let arg1 = consume_string(&mut iter, evaluator).ok_or(())?;
         let arg2 = consume_string(&mut iter, evaluator);
 
         match arg2 {
@@ -457,15 +466,8 @@ pub struct RefDefDirective;
 impl DirectiveHandler for RefDefDirective {
     fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
         let mut iter = args.iter();
-        let id = match consume_string(&mut iter, evaluator) {
-            Some(t) => t,
-            None => return Err(()),
-        };
-
-        let title = match consume_string(&mut iter, evaluator) {
-            Some(t) => t,
-            None => return Err(()),
-        };
+        let id = consume_string(&mut iter, evaluator).ok_or(())?;
+        let title = consume_string(&mut iter, evaluator).ok_or(())?;
 
         let refdef = RefDef::new(&title, evaluator.get_slug());
         evaluator.refdefs.insert(id, refdef);
@@ -479,10 +481,7 @@ pub struct RefDirective;
 impl DirectiveHandler for RefDirective {
     fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
         let mut iter = args.iter();
-        let refid = match consume_string(&mut iter, evaluator) {
-            Some(t) => t,
-            None => return Err(()),
-        };
+        let refid = consume_string(&mut iter, evaluator).ok_or(())?;
 
         let title = match consume_string(&mut iter, evaluator) {
             Some(t) => t,
@@ -679,9 +678,7 @@ mod tests {
                     Node::new_string("x"),
                     Node::new_children(vec![
                         Node::new_string("concat"),
-                        Node::new_children(vec![
-                            Node::new_string("foo"),
-                        ]),
+                        Node::new_children(vec![Node::new_string("foo")]),
                         Node::new_string("bar"),
                     ])
                 ]
@@ -698,8 +695,27 @@ mod tests {
         );
 
         assert_eq!(
+            handler.handle(
+                &mut evaluator,
+                &[
+                    Node::new_string("evaluate"),
+                    Node::new_string("eager"),
+                    Node::new_children(vec![Node::new_string("x")])
+                ]
+            ),
+            Ok("".to_owned())
+        );
+
+        assert_eq!(
             evaluator
                 .lookup(&Node::new_string(""), "x", &vec![])
+                .unwrap(),
+            "barbar".to_owned()
+        );
+
+        assert_eq!(
+            evaluator
+                .lookup(&Node::new_string(""), "eager", &vec![])
                 .unwrap(),
             "barbar".to_owned()
         );
@@ -709,6 +725,29 @@ mod tests {
                 .lookup(&Node::new_string(""), "foo", &vec![])
                 .unwrap(),
             "bar".to_owned()
+        );
+
+        // Now change foo to make sure x changes but eager does not
+        assert_eq!(
+            handler.handle(
+                &mut evaluator,
+                &[Node::new_string("foo"), Node::new_string("baz")]
+            ),
+            Ok("".to_owned())
+        );
+
+        assert_eq!(
+            evaluator
+                .lookup(&Node::new_string(""), "x", &vec![])
+                .unwrap(),
+            "bazbar".to_owned()
+        );
+
+        assert_eq!(
+            evaluator
+                .lookup(&Node::new_string(""), "eager", &vec![])
+                .unwrap(),
+            "barbar".to_owned()
         );
     }
 

@@ -70,9 +70,13 @@ Sets a set of variables for use in child expressions.
 ### Define
 
 ```
-(:define foo bar)
-(:foo)
+(:define [evaluate] <name> <expr>)
 ```
+
+Associates the given `name` with the given expression. If you provide the
+`evaluate` option, `(:define)` will evaluate the expression and store the
+resulting value. Otherwise, the expression itself will be stored and be
+re-evaluated upon each use.
 
 ### Simple Templates
 
