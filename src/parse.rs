@@ -80,7 +80,7 @@ struct StateRocket {
 }
 
 impl StateRocket {
-    fn new(file_id: FileID) -> StateRocket {
+    fn new(file_id: FileID) -> Self {
         StateRocket {
             root: vec![Node::new_string("concat")],
             buffer: vec![],
@@ -159,7 +159,7 @@ struct StateExpression {
 }
 
 impl StateExpression {
-    fn new(file_id: FileID) -> StateExpression {
+    fn new(file_id: FileID) -> Self {
         StateExpression {
             root: vec![],
             saw_rocket: false,
@@ -243,7 +243,7 @@ struct ParseContextStack {
 }
 
 impl ParseContextStack {
-    fn new(file_id: FileID) -> ParseContextStack {
+    fn new(file_id: FileID) -> Self {
         ParseContextStack {
             stack: vec![
                 Box::new(StateRocket {
@@ -278,7 +278,7 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new() -> Parser {
+    pub fn new() -> Self {
         Parser { file_ids: vec![] }
     }
 

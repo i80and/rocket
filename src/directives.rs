@@ -37,7 +37,7 @@ pub struct Version {
 }
 
 impl Version {
-    pub fn new(version: &str) -> Version {
+    pub fn new(version: &str) -> Self {
         Version {
             version: version.split('.').map(|s| s.to_owned()).collect::<Vec<_>>(),
         }
@@ -68,7 +68,7 @@ pub struct Admonition {
 }
 
 impl Admonition {
-    pub fn new(title: &str, class: &str) -> Admonition {
+    pub fn new(title: &str, class: &str) -> Self {
         Admonition {
             title: title.to_owned(),
             class: class.to_owned(),

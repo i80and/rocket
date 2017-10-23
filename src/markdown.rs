@@ -875,7 +875,7 @@ impl<'o> HtmlFormatter<'o> {
         self.output.write_all(text)
     }
 
-    pub fn flush(&mut self) {
+    fn flush(&mut self) {
         let ending_tags = "</section>".repeat(self.last_level as usize);
         self.append_html(ending_tags.as_bytes())
             .expect("Failed to flush markdown formatter");

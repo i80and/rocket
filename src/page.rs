@@ -8,7 +8,7 @@ pub struct Slug {
 }
 
 impl Slug {
-    pub fn new(slug: String) -> Slug {
+    pub fn new(slug: String) -> Self {
         Slug { slug: slug }
     }
 
