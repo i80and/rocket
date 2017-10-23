@@ -120,7 +120,7 @@ impl DirectiveHandler for Markdown {
 
         let (rendered, title) = evaluator.markdown.render(&body, &evaluator.highlighter);
 
-        if !evaluator.theme_config.contains_key("title") {
+        if !title.is_empty() && !evaluator.theme_config.contains_key("title") {
             evaluator
                 .theme_config
                 .insert("title".to_owned(), serde_json::Value::String(title));
