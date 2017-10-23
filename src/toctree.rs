@@ -109,10 +109,6 @@ impl TocTree {
         }
         result.push(Cow::Borrowed("</ul>"));
 
-        if is_root {
-            result.push(Cow::Borrowed("</ul>"));
-        }
-
         Ok(result)
     }
 
