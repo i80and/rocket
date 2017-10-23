@@ -258,6 +258,7 @@ fn main() {
     );
     evaluator.register_prelude("define-template", Box::new(directives::DefineTemplate));
     evaluator.register_prelude("definition-list", Box::new(directives::DefinitionList));
+    evaluator.register_prelude("steps", Box::new(directives::Steps));
     evaluator.register_prelude("concat", Box::new(directives::Concat));
     evaluator.register_prelude("include", Box::new(directives::Include));
     evaluator.register_prelude("import", Box::new(directives::Import));

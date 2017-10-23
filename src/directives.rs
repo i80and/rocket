@@ -1,7 +1,8 @@
-use std::{cmp, iter, mem, slice, str};
-use std::rc::Rc;
-use std::path::{Path, PathBuf};
+use std::borrow::Cow;
 use std::collections::hash_map::Entry;
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
+use std::{cmp, iter, mem, slice, str};
 use regex::{Captures, Regex};
 use serde_json;
 use parse::{Node, NodeValue};
@@ -491,6 +492,59 @@ impl DirectiveHandler for RefDirective {
         let placeholder = evaluator.get_placeholder(refid, PlaceholderAction::Path);
 
         Ok(format!("[{}]({})", title, placeholder))
+    }
+}
+
+pub struct Steps;
+
+impl DirectiveHandler for Steps {
+    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+        let md = Markdown;
+        let mut result: Vec<Cow<str>> = Vec::with_capacity(2 + (args.len() * 4));
+        result.push(Cow::from(r#"<div class="steps">"#));
+
+        for (i, step_node) in args.iter().enumerate() {
+            let mut parse_args = |args: &[Node], evaluator: &mut Evaluator| {
+                if args.len() != 3 {
+                    return Err(());
+                }
+
+                Ok((evaluator.evaluate(&args[1]), evaluator.evaluate(&args[2])))
+            };
+
+            let (title, body) = match step_node.value {
+                NodeValue::Owned(ref s) => {
+                    let stored_value = match evaluator.ctx.get(s) {
+                        Some(v) => Rc::clone(v),
+                        None => return Err(()),
+                    };
+
+                    match *stored_value {
+                        StoredValue::Node(ref node) => match node.value {
+                            NodeValue::Owned(_) => return Err(()),
+                            NodeValue::Children(ref children) => parse_args(children, evaluator),
+                        },
+                        _ => return Err(()),
+                    }
+                }
+                NodeValue::Children(ref children) => parse_args(children, evaluator),
+            }?;
+
+            let title = md.handle(evaluator, &[Node::new_string(title)])?;
+            let body = md.handle(evaluator, &[Node::new_string(body)])?;
+
+            result.push(Cow::from(
+                r#"<div class="steps__step"><div class="steps__bullet"><div class="steps__stepnumber">"#,
+            ));
+            result.push(Cow::from((i + 1).to_string()));
+            result.push(Cow::from(r#"</div></div>"#));
+            result.push(Cow::from(
+                format!(r#"<h4>{}</h4><div>{}</div></div>"#, title, body),
+            ))
+        }
+
+        result.push(Cow::from("</div>"));
+        Ok(result.concat())
     }
 }
 

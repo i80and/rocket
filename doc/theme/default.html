@@ -22,17 +22,23 @@ nav li.current > a {
 }
 
 .body {
-  position: relative;
   left: 250px;
+  line-height: 24px;
+  max-width: calc(100vw - 260px);
+  position: relative;
 }
 
 section {
-  line-height: 150%;
   max-width: 800px;
 }
 
 pre {
   overflow-x: scroll;
+  margin: 0;
+}
+
+pre > code > pre {
+  padding: 10px
 }
 
 .admonition {
@@ -49,6 +55,29 @@ pre {
 
 .admonition-title {
   font-variant: small-caps;
+}
+
+.steps__step {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+  margin: 0;
+}
+
+.steps__bullet {
+  display: table-cell;
+  padding-right: 10px;
+  width: 2.5em;
+}
+
+.steps__stepnumber {
+  text-align: center;
+  background-color: #333;
+  color: #fff;
+  width: 24px;
+  font-weight: 700;
+  height: 24px;
+  border-radius: 12px;
 }
 </style>
 </head>
