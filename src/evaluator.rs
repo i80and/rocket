@@ -34,15 +34,20 @@ impl RefDef {
     }
 }
 
+pub enum StoredValue {
+    Directive(Box<directives::DirectiveHandler>),
+    Node(Node),
+}
+
 pub struct Evaluator {
-    directives: HashMap<String, Rc<directives::DirectiveHandler>>,
     current_slug: Option<Slug>,
 
     pub parser: Parser,
     pub markdown: markdown::MarkdownRenderer,
     pub highlighter: SyntaxHighlighter,
 
-    pub ctx: HashMap<String, NodeValue>,
+    prelude_ctx: HashMap<String, Rc<StoredValue>>,
+    pub ctx: HashMap<String, Rc<StoredValue>>,
     pub refdefs: HashMap<String, RefDef>,
     pub theme_config: serde_json::map::Map<String, serde_json::Value>,
     pub toctree: TocTree,
@@ -73,11 +78,11 @@ impl Evaluator {
             Regex::new(&pattern_text).expect("Failed to compile linker pattern");
 
         Evaluator {
-            directives: HashMap::new(),
             current_slug: None,
             parser: Parser::new(),
             markdown: markdown::MarkdownRenderer::new(),
             highlighter: SyntaxHighlighter::new(syntax_theme),
+            prelude_ctx: HashMap::new(),
             ctx: HashMap::new(),
             refdefs: HashMap::new(),
             theme_config: serde_json::map::Map::new(),
@@ -89,12 +94,22 @@ impl Evaluator {
         }
     }
 
+    pub fn register_prelude<S: Into<String>>(
+        &mut self,
+        name: S,
+        handler: Box<directives::DirectiveHandler>,
+    ) {
+        self.prelude_ctx
+            .insert(name.into(), Rc::new(StoredValue::Directive(handler)));
+    }
+
     pub fn register<S: Into<String>>(
         &mut self,
         name: S,
-        handler: Rc<directives::DirectiveHandler>,
+        handler: Box<directives::DirectiveHandler>,
     ) {
-        self.directives.insert(name.into(), handler);
+        self.ctx
+            .insert(name.into(), Rc::new(StoredValue::Directive(handler)));
     }
 
     pub fn evaluate(&mut self, node: &Node) -> String {
@@ -109,7 +124,6 @@ impl Evaluator {
                 self.lookup(node, directive_name.as_ref(), &children[1..])
                     .unwrap_or_else(|_| "".to_owned())
             } else {
-                println!("Empty node");
                 "".to_owned()
             },
         }
@@ -181,25 +195,18 @@ impl Evaluator {
         Ok(result.into_owned())
     }
 
-    fn lookup(&mut self, node: &Node, key: &str, args: &[Node]) -> Result<String, ()> {
-        if let Some(&NodeValue::Owned(ref value)) = self.ctx.get(key) {
-            return Ok(value.to_owned());
-        }
-
-        let handler = match self.directives.get(key) {
-            Some(handler) => Rc::clone(handler),
+    pub fn lookup(&mut self, node: &Node, key: &str, args: &[Node]) -> Result<String, ()> {
+        let stored = match self.ctx.get(key).or_else(|| self.prelude_ctx.get(key)) {
+            Some(val) => Rc::clone(val),
             None => {
-                self.error(node, &format!("Unknown directive {}", key));
+                self.error(node, &format!("Unknown name: '{}'", key));
                 return Err(());
             }
         };
 
-        match handler.handle(self, args) {
-            Ok(result) => Ok(result),
-            Err(_) => {
-                self.error(node, &format!("Error in directive {}", key));
-                Err(())
-            }
+        match *stored {
+            StoredValue::Node(ref stored_node) => Ok(self.evaluate(stored_node)),
+            StoredValue::Directive(ref handler) => handler.handle(self, args),
         }
     }
 }

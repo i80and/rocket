@@ -67,11 +67,11 @@ Sets a set of variables for use in child expressions.
 )
 ```
 
-### Define/Get
+### Define
 
 ```
 (:define foo bar)
-(:get foo)
+(:foo)
 ```
 
 ### Simple Templates

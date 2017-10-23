@@ -6,7 +6,7 @@ use regex::{Captures, Regex};
 use serde_json;
 use parse::{Node, NodeValue};
 use page::Slug;
-use evaluator::{Evaluator, PlaceholderAction, RefDef};
+use evaluator::{Evaluator, PlaceholderAction, RefDef, StoredValue};
 
 fn consume_string(iter: &mut slice::Iter<Node>, evaluator: &mut Evaluator) -> Option<String> {
     match iter.next() {
@@ -214,7 +214,7 @@ impl DirectiveHandler for DefineTemplate {
             Err(_) => return Err(()),
         };
 
-        evaluator.register(name, Rc::new(Template::new(template_text, checkers)));
+        evaluator.register(name, Box::new(Template::new(template_text, checkers)));
         Ok("".to_owned())
     }
 }
@@ -306,7 +306,9 @@ impl DirectiveHandler for Let {
 
                 for pair in children.chunks(2) {
                     let evaluated_key = evaluator.evaluate(&pair[0]);
-                    let evaluated_value = NodeValue::Owned(evaluator.evaluate(&pair[1]));
+                    let evaluated_value = Rc::new(StoredValue::Node(
+                        Node::new_string(evaluator.evaluate(&pair[1])),
+                    ));
 
                     let mut entry = evaluator.ctx.entry(evaluated_key.to_owned());
                     let original_value = match entry {
@@ -347,31 +349,12 @@ impl DirectiveHandler for Define {
         }
 
         let key = evaluator.evaluate(&args[0]);
+        let value = Rc::new(StoredValue::Node(
+            Node::new(args[1].value.clone(), args[1].file_id),
+        ));
 
-        evaluator.ctx.insert(key.to_owned(), args[1].value.clone());
+        evaluator.ctx.insert(key.to_owned(), value);
         Ok("".to_owned())
-    }
-}
-
-pub struct Get;
-
-impl DirectiveHandler for Get {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
-        if args.len() != 1 {
-            return Err(());
-        }
-
-        let key = evaluator.evaluate(&args[0]);
-        let value = match evaluator.ctx.get(&key) {
-            Some(value) => value,
-            None => return Err(()),
-        }.to_owned();
-
-        let node = Node {
-            value: value.clone(),
-            file_id: args[0].file_id,
-        };
-        Ok(evaluator.evaluate(&node))
     }
 }
 
@@ -538,7 +521,7 @@ mod tests {
     #[test]
     fn test_version() {
         let mut evaluator = Evaluator::new();
-        evaluator.register("concat", Rc::new(Concat));
+        evaluator.register("concat", Box::new(Concat));
         let handler = Version::new("3.4.0");
 
         assert_eq!(handler.handle(&mut evaluator, &[]), Ok("3.4.0".to_owned()));
@@ -586,7 +569,7 @@ mod tests {
     #[test]
     fn test_concat() {
         let mut evaluator = Evaluator::new();
-        evaluator.register("version", Rc::new(Version::new("3.4")));
+        evaluator.register("version", Box::new(Version::new("3.4")));
         let handler = Concat;
 
         assert_eq!(handler.handle(&mut evaluator, &[]), Ok("".to_owned()));
@@ -650,7 +633,7 @@ mod tests {
         let mut evaluator = Evaluator::new();
         let handler = Let;
 
-        evaluator.register("concat", Rc::new(Concat));
+        evaluator.register("concat", Box::new(Concat));
 
         assert!(handler.handle(&mut evaluator, &[]).is_err());
         let result = handler.handle(
@@ -677,8 +660,16 @@ mod tests {
     #[test]
     fn test_define() {
         let mut evaluator = Evaluator::new();
-        evaluator.register("concat", Rc::new(Concat));
+        evaluator.register("concat", Box::new(Concat));
         let handler = Define;
+
+        assert_eq!(
+            handler.handle(
+                &mut evaluator,
+                &[Node::new_string("foo"), Node::new_string("foo")]
+            ),
+            Ok("".to_owned())
+        );
 
         assert!(handler.handle(&mut evaluator, &[]).is_err());
         assert_eq!(
@@ -688,7 +679,9 @@ mod tests {
                     Node::new_string("x"),
                     Node::new_children(vec![
                         Node::new_string("concat"),
-                        Node::new_string("foo"),
+                        Node::new_children(vec![
+                            Node::new_string("foo"),
+                        ]),
                         Node::new_string("bar"),
                     ])
                 ]
@@ -696,34 +689,26 @@ mod tests {
             Ok("".to_owned())
         );
 
-        let value = evaluator.ctx.get("x").unwrap().clone();
         assert_eq!(
-            evaluator.evaluate(&Node {
-                value: value,
-                file_id: 0,
-            }),
-            "foobar".to_owned()
+            handler.handle(
+                &mut evaluator,
+                &[Node::new_string("foo"), Node::new_string("bar")]
+            ),
+            Ok("".to_owned())
         );
-    }
 
-    #[test]
-    fn test_get() {
-        let mut evaluator = Evaluator::new();
-        evaluator.register("concat", Rc::new(Concat));
-        let handler = Get;
-
-        evaluator.ctx.insert(
-            "foo".to_owned(),
-            NodeValue::Children(vec![
-                Node::new_string("concat"),
-                Node::new_string("foo"),
-                Node::new_string("bar"),
-            ]),
-        );
-        assert!(handler.handle(&mut evaluator, &[]).is_err());
         assert_eq!(
-            handler.handle(&mut evaluator, &[Node::new_string("foo")]),
-            Ok("foobar".to_owned())
+            evaluator
+                .lookup(&Node::new_string(""), "x", &vec![])
+                .unwrap(),
+            "barbar".to_owned()
+        );
+
+        assert_eq!(
+            evaluator
+                .lookup(&Node::new_string(""), "foo", &vec![])
+                .unwrap(),
+            "bar".to_owned()
         );
     }
 

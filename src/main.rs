@@ -31,7 +31,6 @@ mod theme;
 mod toctree;
 
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::convert::From;
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
@@ -246,34 +245,36 @@ fn main() {
     simple_logger::init_with_level(loglevel).expect("Failed to initialize logger");
 
     let mut evaluator = Evaluator::new_with_options(&config.syntax_theme);
-    evaluator.register("md", Rc::new(directives::Markdown));
-    evaluator.register("table", Rc::new(directives::Dummy));
-    evaluator.register("version", Rc::new(directives::Version::new("3.4.0")));
-    evaluator.register("note", Rc::new(directives::Admonition::new("Note", "note")));
-    evaluator.register(
-        "warning",
-        Rc::new(directives::Admonition::new("Warning", "warning")),
+    evaluator.register_prelude("md", Box::new(directives::Markdown));
+    evaluator.register_prelude("table", Box::new(directives::Dummy));
+    evaluator.register_prelude("version", Box::new(directives::Version::new("3.4.0")));
+    evaluator.register_prelude(
+        "note",
+        Box::new(directives::Admonition::new("Note", "note")),
     );
-    evaluator.register("define-template", Rc::new(directives::DefineTemplate));
-    evaluator.register("definition-list", Rc::new(directives::DefinitionList));
-    evaluator.register("concat", Rc::new(directives::Concat));
-    evaluator.register("include", Rc::new(directives::Include));
-    evaluator.register("import", Rc::new(directives::Import));
-    evaluator.register("null", Rc::new(directives::Dummy));
-    evaluator.register("let", Rc::new(directives::Let));
-    evaluator.register("define", Rc::new(directives::Define));
-    evaluator.register("get", Rc::new(directives::Get));
-    evaluator.register("theme-config", Rc::new(directives::ThemeConfig));
-    evaluator.register("toctree", Rc::new(directives::TocTree));
-    evaluator.register("define-ref", Rc::new(directives::RefDefDirective));
-    evaluator.register("ref", Rc::new(directives::RefDirective));
+    evaluator.register_prelude(
+        "warning",
+        Box::new(directives::Admonition::new("Warning", "warning")),
+    );
+    evaluator.register_prelude("define-template", Box::new(directives::DefineTemplate));
+    evaluator.register_prelude("definition-list", Box::new(directives::DefinitionList));
+    evaluator.register_prelude("concat", Box::new(directives::Concat));
+    evaluator.register_prelude("include", Box::new(directives::Include));
+    evaluator.register_prelude("import", Box::new(directives::Import));
+    evaluator.register_prelude("null", Box::new(directives::Dummy));
+    evaluator.register_prelude("let", Box::new(directives::Let));
+    evaluator.register_prelude("define", Box::new(directives::Define));
+    evaluator.register_prelude("theme-config", Box::new(directives::ThemeConfig));
+    evaluator.register_prelude("toctree", Box::new(directives::TocTree));
+    evaluator.register_prelude("define-ref", Box::new(directives::RefDefDirective));
+    evaluator.register_prelude("ref", Box::new(directives::RefDirective));
 
-    evaluator.register("h1", Rc::new(directives::Heading::new(1)));
-    evaluator.register("h2", Rc::new(directives::Heading::new(2)));
-    evaluator.register("h3", Rc::new(directives::Heading::new(3)));
-    evaluator.register("h4", Rc::new(directives::Heading::new(4)));
-    evaluator.register("h5", Rc::new(directives::Heading::new(5)));
-    evaluator.register("h6", Rc::new(directives::Heading::new(6)));
+    evaluator.register_prelude("h1", Box::new(directives::Heading::new(1)));
+    evaluator.register_prelude("h2", Box::new(directives::Heading::new(2)));
+    evaluator.register_prelude("h3", Box::new(directives::Heading::new(3)));
+    evaluator.register_prelude("h4", Box::new(directives::Heading::new(4)));
+    evaluator.register_prelude("h5", Box::new(directives::Heading::new(5)));
+    evaluator.register_prelude("h6", Box::new(directives::Heading::new(6)));
 
     let start_time = time::precise_time_ns();
     config.build_project(&mut evaluator);

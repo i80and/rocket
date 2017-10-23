@@ -26,14 +26,18 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn new_children(value: Vec<Node>) -> Node {
+    pub fn new(value: NodeValue, file_id: FileID) -> Self {
+        Node { value, file_id }
+    }
+
+    pub fn new_children(value: Vec<Node>) -> Self {
         Node {
             value: NodeValue::Children(value),
             file_id: 0,
         }
     }
 
-    pub fn new_string<S: Into<String>>(value: S) -> Node {
+    pub fn new_string<S: Into<String>>(value: S) -> Self {
         Node {
             value: NodeValue::Owned(value.into()),
             file_id: 0,
