@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fs::File;
 use std::io::prelude::*;
 use std::mem;
@@ -64,6 +65,7 @@ enum StackRequest {
     None,
     Pop(u8),
     Push(Box<TokenHandler>),
+    Error(Cow<'static, str>),
 }
 
 trait TokenHandler {
@@ -122,7 +124,7 @@ impl TokenHandler for StateRocket {
             Token::Rocket => {
                 self.ensure_string().push_str("=>");
             }
-            Token::Indent => panic!("Unexpected indentation token"),
+            Token::Indent => return StackRequest::Error(Cow::from("Unexpected indentation token")),
             Token::Dedent => {
                 // We need to pop both the rocket and the expression that started the rocket
                 return StackRequest::Pop(2);
@@ -222,7 +224,7 @@ impl TokenHandler for StateExpression {
         }
 
         if self.saw_rocket {
-            panic!("Expected indentation after =>");
+            return StackRequest::Error(Cow::from("Expected indentation after =>"));
         }
 
         StackRequest::None
@@ -242,6 +244,7 @@ impl TokenHandler for StateExpression {
 
 struct ParseContextStack {
     stack: Vec<Box<TokenHandler>>,
+    errors: Vec<Cow<'static, str>>,
 }
 
 impl ParseContextStack {
@@ -254,6 +257,7 @@ impl ParseContextStack {
                     file_id: file_id,
                 }),
             ],
+            errors: vec![],
         }
     }
 
@@ -271,6 +275,7 @@ impl ParseContextStack {
                 (**self.stack.last_mut().expect("Empty parse stack")).push(handler.finish());
             },
             StackRequest::None => (),
+            StackRequest::Error(msg) => self.errors.push(msg),
         }
     }
 }
@@ -291,7 +296,7 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self, path: &Path) -> Result<Node, ()> {
+    pub fn parse(&mut self, path: &Path) -> Result<Node, Cow<'static, str>> {
         debug!("Parsing {}", path.to_string_lossy());
 
         let id = self.file_ids.len() as FileID;
@@ -300,8 +305,9 @@ impl Parser {
         let mut file = match File::open(path) {
             Ok(f) => f,
             Err(_) => {
-                error!("Failed to open {}", path.to_string_lossy());
-                return Err(());
+                return Err(Cow::from(
+                    format!("Failed to open {}", path.to_string_lossy()),
+                ));
             }
         };
         let mut data = String::new();
@@ -311,8 +317,15 @@ impl Parser {
         let mut stack = ParseContextStack::new(id);
         for token in lex(&data) {
             stack.handle(&token);
+            if !stack.errors.is_empty() {
+                return Err(stack.errors[0].clone());
+            }
         }
 
-        Ok(stack.stack.pop().expect("Empty state stack").finish())
+        let root = stack.stack.pop().expect("Empty state stack").finish();
+        if !stack.stack.is_empty() {
+            return Err(Cow::from("Unterminated block"));
+        }
+        Ok(root)
     }
 }

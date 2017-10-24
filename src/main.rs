@@ -132,8 +132,8 @@ impl Project {
 
         let node = match evaluator.parser.parse(path) {
             Ok(n) => n,
-            Err(_) => {
-                error!("Failed to parse {}", path.to_string_lossy());
+            Err(msg) => {
+                error!("Failed to parse '{}': {}", path.to_string_lossy(), msg);
                 return Err(());
             }
         };

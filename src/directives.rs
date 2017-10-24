@@ -261,7 +261,10 @@ impl DirectiveHandler for Include {
 
         let node = match evaluator.parser.parse(path.as_ref()) {
             Ok(n) => n,
-            Err(_) => return Err(()),
+            Err(msg) => {
+                evaluator.error(&args[0], msg.as_ref());
+                return Err(());
+            }
         };
 
         Ok(evaluator.evaluate(&node))
