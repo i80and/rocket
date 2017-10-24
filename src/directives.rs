@@ -262,7 +262,8 @@ impl DirectiveHandler for Include {
         let node = match evaluator.parser.parse(path.as_ref()) {
             Ok(n) => n,
             Err(msg) => {
-                evaluator.error(&args[0], msg.as_ref());
+                let msg = format!("Failed to parse '{}': {}", path.to_string_lossy(), msg);
+                evaluator.error(&args[0], &msg);
                 return Err(());
             }
         };

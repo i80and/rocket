@@ -194,6 +194,10 @@ impl Project {
                 continue;
             }
 
+            if entry.path().extension() != Some("rocket".as_ref()) {
+                continue;
+            }
+
             let path = entry.path();
             let slug = path.strip_prefix(&self.content_dir)
                 .expect("Failed to get output path");
