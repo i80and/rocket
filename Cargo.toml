@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Andrew Aldridge <i80and@foxquill.com>"]
 
 [dependencies]
-argparse = "0.2"
+argonaut = "0.12"
 glob = "0.2"
 handlebars = "0.29"
 lazy_static = "0.2"

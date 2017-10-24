@@ -1,4 +1,4 @@
-extern crate argparse;
+extern crate argonaut;
 extern crate comrak;
 extern crate glob;
 extern crate handlebars;
@@ -23,6 +23,7 @@ extern crate walkdir;
 mod directives;
 mod evaluator;
 mod highlighter;
+mod init;
 mod lex;
 mod markdown;
 mod page;
@@ -32,11 +33,11 @@ mod toctree;
 
 use std::collections::HashMap;
 use std::convert::From;
+use std::{env, mem, process};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
-use std::mem;
 use std::path::{Path, PathBuf};
-use argparse::{ArgumentParser, StoreTrue};
+use argonaut::ArgDef;
 use evaluator::Evaluator;
 use page::{Page, Slug};
 use toctree::TocTree;
@@ -224,25 +225,11 @@ impl Project {
     }
 }
 
-fn main() {
+fn build(verbose: bool) {
     let mut config =
         Project::read_toml(Path::new("config.toml")).expect("Failed to open config.toml");
 
-    {
-        let mut ap = ArgumentParser::new();
-        ap.set_description("The Rocket documentation build system.");
-        ap.refer(&mut config.verbose)
-            .add_option(&["-v", "--verbose"], StoreTrue, "Be verbose");
-        ap.parse_args_or_exit();
-    }
-
-    let loglevel = if config.verbose {
-        log::LogLevel::Debug
-    } else {
-        log::LogLevel::Info
-    };
-
-    simple_logger::init_with_level(loglevel).expect("Failed to initialize logger");
+    config.verbose = verbose;
 
     let mut evaluator = Evaluator::new_with_options(&config.syntax_theme);
     evaluator.register_prelude("md", Box::new(directives::Markdown));
@@ -284,4 +271,88 @@ fn main() {
         "Took {} seconds",
         (time::precise_time_ns() - start_time) as f64 / (f64::from(1_000_000_000))
     );
+}
+
+const DESCRIPTION: &'static str = "The Rocket documentation build system.";
+const DESCRIPTION_BUILD: &'static str =
+    "Build the Rocket project in the current working directory.";
+const DESCRIPTION_NEW: &'static str = "Create an empty Rocket project.";
+
+fn setup_logging(verbose: bool) {
+    let loglevel = if verbose {
+        log::LogLevel::Debug
+    } else {
+        log::LogLevel::Info
+    };
+
+    simple_logger::init_with_level(loglevel).expect("Failed to initialize logger");
+}
+
+macro_rules! flag_verbose {
+    ( $x:expr ) => {
+        {
+            ArgDef::flag("verbose", $x)
+                .short("v")
+                .help("Increase logging verbosity.")
+        }
+    };
+}
+
+fn main() {
+    let args = env::args().skip(1).collect::<Vec<_>>();
+
+    match argonaut::parse(
+        "rocket",
+        &args,
+        vec![
+            ArgDef::subcommand("new", |program, args| {
+                let mut verbose = false;
+                let mut name = String::new();
+                argonaut::parse(
+                    program,
+                    args,
+                    vec![
+                        ArgDef::positional("name", &mut name)
+                            .help("The name of the project to create."),
+                        flag_verbose!(&mut verbose),
+                        ArgDef::default_help(DESCRIPTION_NEW).short("h"),
+                    ],
+                )?;
+
+                setup_logging(verbose);
+                init::init(&name);
+                Ok(None)
+            }).help(DESCRIPTION_NEW),
+            ArgDef::subcommand("build", |program, args| {
+                let mut verbose = false;
+                argonaut::parse(
+                    program,
+                    args,
+                    vec![
+                        flag_verbose!(&mut verbose),
+                        ArgDef::default_help(DESCRIPTION_BUILD).short("h"),
+                    ],
+                )?;
+
+                setup_logging(verbose);
+                build(verbose);
+                Ok(None)
+            }).help(DESCRIPTION_BUILD),
+            ArgDef::default_help(DESCRIPTION).short("h"),
+            ArgDef::interrupt("version", |_| {
+                println!(
+                    "{}",
+                    option_env!("CARGO_PKG_VERSION").unwrap_or("<unknown>")
+                );
+            }).help("Print version string and abort."),
+        ],
+    ) {
+        Ok(Some(error_code)) => {
+            process::exit(error_code);
+        }
+        Ok(None) | Err(argonaut::ParseError::Interrupted(_)) => {}
+        Err(_) => {
+            process::exit(1);
+        }
+    }
 }
