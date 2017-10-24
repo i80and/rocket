@@ -1,4 +1,3 @@
-extern crate argonaut;
 extern crate comrak;
 extern crate glob;
 extern crate handlebars;
@@ -37,7 +36,6 @@ use std::{env, mem, process};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
-use argonaut::ArgDef;
 use evaluator::Evaluator;
 use page::{Page, Slug};
 use toctree::TocTree;
@@ -277,12 +275,92 @@ fn build(verbose: bool) {
     );
 }
 
-const DESCRIPTION: &'static str = "The Rocket documentation build system.";
 const DESCRIPTION_BUILD: &'static str =
     "Build the Rocket project in the current working directory.";
 const DESCRIPTION_NEW: &'static str = "Create an empty Rocket project.";
+const HELP_VERBOSE: &'static str = "Increase logging verbosity.";
 
-fn setup_logging(verbose: bool) {
+enum ArgMode {
+    Root,
+    New,
+    Build,
+}
+
+fn main() {
+    let args = env::args().skip(1);
+    let mut verbose = false;
+    let mut new_name: Option<String> = None;
+    let mut mode = ArgMode::Root;
+
+    let help = |code| -> ! {
+        println!("Usage:\n  rocket [-h, OPTS...] {{ new | build }} ...\n");
+        println!("Description:\n  The Rocket documentation build system.\n");
+        println!(
+            "Subcommands:\n  new\n    {}\n  build\n    {}\n",
+            DESCRIPTION_NEW,
+            DESCRIPTION_BUILD
+        );
+        println!("Optional arguments:");
+        println!("  --help, -h\n    Print this message and exit.\n");
+        println!("  --version, -V\n    Print version string and exit.\n");
+
+        process::exit(code);
+    };
+
+    let help_build = |code| -> ! {
+        println!("Usage:\n  rocket build [-h, OPTS...]\n");
+        println!("Description:\n  {}\n", DESCRIPTION_BUILD);
+        println!("Optional arguments:");
+        println!("  --verbose, -v\n    {}\n", HELP_VERBOSE);
+        println!("  --help, -h\n    Print this message and exit.\n");
+
+        process::exit(code);
+    };
+
+    let help_new = |code| -> ! {
+        println!("Usage:\n  rocket new [-h, OPTS...] name\n");
+        println!("Description:\n  {}\n", DESCRIPTION_NEW);
+        println!("Positional arguments:\n  name\n    The name of the project to create.\n");
+        println!("Optional arguments:");
+        println!("  --verbose, -v\n    {}\n", HELP_VERBOSE);
+        println!("  --help, -h\n    Print this message and exit.\n");
+
+        process::exit(code);
+    };
+
+    for arg in args {
+        match mode {
+            ArgMode::Root => match arg.as_ref() {
+                "-h" | "--help" => help(0),
+                "-V" | "--version" => {
+                    println!(
+                        "{}",
+                        option_env!("CARGO_PKG_VERSION").unwrap_or("<unknown>")
+                    );
+                    return;
+                }
+                "-v" | "--verbose" => verbose = true,
+                "build" => mode = ArgMode::Build,
+                "new" => mode = ArgMode::New,
+                _ => help(1),
+            },
+            ArgMode::New => {
+                let alphanumeric = arg.chars().all(|c| c.is_alphabetic() || c.is_numeric());
+                match arg.as_ref() {
+                    "-h" | "--help" => help_new(0),
+                    "-v" | "--verbose" => verbose = true,
+                    n if alphanumeric => new_name = Some(n.to_owned()),
+                    _ => help_new(1),
+                }
+            }
+            ArgMode::Build => match arg.as_ref() {
+                "-h" | "--help" => help_build(0),
+                "-v" | "--verbose" => verbose = true,
+                _ => help_build(1),
+            },
+        }
+    }
+
     let loglevel = if verbose {
         log::LogLevel::Debug
     } else {
@@ -290,73 +368,10 @@ fn setup_logging(verbose: bool) {
     };
 
     simple_logger::init_with_level(loglevel).expect("Failed to initialize logger");
-}
 
-macro_rules! flag_verbose {
-    ( $x:expr ) => {
-        {
-            ArgDef::flag("verbose", $x)
-                .short("v")
-                .help("Increase logging verbosity.")
-        }
-    };
-}
-
-fn main() {
-    let args = env::args().skip(1).collect::<Vec<_>>();
-
-    match argonaut::parse(
-        "rocket",
-        &args,
-        vec![
-            ArgDef::subcommand("new", |program, args| {
-                let mut verbose = false;
-                let mut name = String::new();
-                argonaut::parse(
-                    program,
-                    args,
-                    vec![
-                        ArgDef::positional("name", &mut name)
-                            .help("The name of the project to create."),
-                        flag_verbose!(&mut verbose),
-                        ArgDef::default_help(DESCRIPTION_NEW).short("h"),
-                    ],
-                )?;
-
-                setup_logging(verbose);
-                init::init(&name);
-                Ok(None)
-            }).help(DESCRIPTION_NEW),
-            ArgDef::subcommand("build", |program, args| {
-                let mut verbose = false;
-                argonaut::parse(
-                    program,
-                    args,
-                    vec![
-                        flag_verbose!(&mut verbose),
-                        ArgDef::default_help(DESCRIPTION_BUILD).short("h"),
-                    ],
-                )?;
-
-                setup_logging(verbose);
-                build(verbose);
-                Ok(None)
-            }).help(DESCRIPTION_BUILD),
-            ArgDef::default_help(DESCRIPTION).short("h"),
-            ArgDef::interrupt("version", |_| {
-                println!(
-                    "{}",
-                    option_env!("CARGO_PKG_VERSION").unwrap_or("<unknown>")
-                );
-            }).help("Print version string and abort."),
-        ],
-    ) {
-        Ok(Some(error_code)) => {
-            process::exit(error_code);
-        }
-        Ok(None) | Err(argonaut::ParseError::Interrupted(_)) => {}
-        Err(_) => {
-            process::exit(1);
-        }
+    match mode {
+        ArgMode::Root => help(1),
+        ArgMode::New => init::init(&new_name.unwrap_or_else(|| help_new(1))),
+        ArgMode::Build => build(verbose),
     }
 }
