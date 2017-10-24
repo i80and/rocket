@@ -304,7 +304,7 @@ impl DirectiveHandler for Let {
                         Node::new_string(evaluator.evaluate(&pair[1])),
                     ));
 
-                    let mut entry = evaluator.ctx.entry(evaluated_key.to_owned());
+                    let entry = evaluator.ctx.entry(evaluated_key.to_owned());
                     let original_value = match entry {
                         Entry::Occupied(mut slot) => {
                             Some(mem::replace(slot.get_mut(), evaluated_value))
@@ -504,7 +504,7 @@ impl DirectiveHandler for Steps {
         result.push(Cow::from(r#"<div class="steps">"#));
 
         for (i, step_node) in args.iter().enumerate() {
-            let mut parse_args = |args: &[Node], evaluator: &mut Evaluator| {
+            let parse_args = |args: &[Node], evaluator: &mut Evaluator| {
                 if args.len() != 3 {
                     return Err(());
                 }
