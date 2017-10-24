@@ -121,8 +121,13 @@ impl Evaluator {
                     NodeValue::Children(_) => Cow::Owned(self.evaluate(first_element)),
                 };
 
-                self.lookup(node, directive_name.as_ref(), &children[1..])
-                    .unwrap_or_else(|_| "".to_owned())
+                match self.lookup(node, directive_name.as_ref(), &children[1..]) {
+                    Ok(s) => s,
+                    Err(_) => {
+                        self.error(node, "Error evaluating node");
+                        String::new()
+                    }
+                }
             } else {
                 "".to_owned()
             },
