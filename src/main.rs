@@ -1,3 +1,4 @@
+extern crate bytecount;
 extern crate comrak;
 extern crate glob;
 extern crate handlebars;

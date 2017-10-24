@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Andrew Aldridge <i80and@foxquill.com>"]
 
 [dependencies]
+bytecount = "0.2"
 glob = "0.2"
 handlebars = "0.29"
 lazy_static = "0.2"

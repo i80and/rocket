@@ -24,24 +24,31 @@ pub enum NodeValue {
 pub struct Node {
     pub value: NodeValue,
     pub file_id: FileID,
+    pub lineno: i32,
 }
 
 impl Node {
-    pub fn new(value: NodeValue, file_id: FileID) -> Self {
-        Node { value, file_id }
-    }
-
-    pub fn new_children(value: Vec<Node>) -> Self {
+    pub fn new(value: NodeValue, file_id: FileID, lineno: i32) -> Self {
         Node {
-            value: NodeValue::Children(value),
-            file_id: 0,
+            value,
+            file_id,
+            lineno,
         }
     }
 
-    pub fn new_string<S: Into<String>>(value: S) -> Self {
+    pub fn new_children(value: Vec<Node>, file_id: FileID, lineno: i32) -> Self {
+        Node {
+            value: NodeValue::Children(value),
+            file_id,
+            lineno,
+        }
+    }
+
+    pub fn new_string<S: Into<String>>(value: S, file_id: FileID, lineno: i32) -> Self {
         Node {
             value: NodeValue::Owned(value.into()),
-            file_id: 0,
+            file_id,
+            lineno,
         }
     }
 
@@ -79,14 +86,16 @@ struct StateRocket {
     root: Vec<Node>,
     buffer: Vec<String>,
     file_id: FileID,
+    lineno: i32,
 }
 
 impl StateRocket {
-    fn new(file_id: FileID) -> Self {
+    fn new(file_id: FileID, lineno: i32) -> Self {
         StateRocket {
-            root: vec![Node::new_string("concat")],
+            root: vec![Node::new_string("concat", file_id, lineno)],
             buffer: vec![],
             file_id: file_id,
+            lineno,
         }
     }
 
@@ -102,21 +111,22 @@ impl StateRocket {
 impl TokenHandler for StateRocket {
     fn handle_token(&mut self, token: &Token) -> StackRequest {
         match *token {
-            Token::Text(s) => {
+            Token::Text(_, s) => {
                 self.buffer.push(s.to_owned());
             }
-            Token::Character(c) => {
+            Token::Character(_, c) => {
                 self.ensure_string().push(c);
             }
-            Token::Quote => {
+            Token::Quote(_) => {
                 self.ensure_string().push('"');
             }
-            Token::StartBlock => {
+            Token::StartBlock(lineno) => {
                 if !self.buffer.is_empty() {
-                    self.root.push(Node::new_string(self.buffer.concat()));
+                    self.root
+                        .push(Node::new_string(self.buffer.concat(), self.file_id, lineno));
                     self.buffer.clear();
                 }
-                return StackRequest::Push(Box::new(StateExpression::new(self.file_id)));
+                return StackRequest::Push(Box::new(StateExpression::new(self.file_id, lineno)));
             }
             Token::RightParen => {
                 self.ensure_string().push(')');
@@ -137,10 +147,14 @@ impl TokenHandler for StateRocket {
     fn finish(&mut self) -> Node {
         if !self.buffer.is_empty() {
             let string = self.buffer.concat();
-            self.root.push(Node::new_string(string));
+            self.root.push(Node::new_string(string, self.file_id, -1));
         }
 
-        Node::new_children(mem::replace(&mut self.root, vec![]))
+        Node::new_children(
+            mem::replace(&mut self.root, vec![]),
+            self.file_id,
+            self.lineno,
+        )
     }
 
     fn push(&mut self, node: Node) {
@@ -155,17 +169,19 @@ struct StateExpression {
     root: Vec<Node>,
     saw_rocket: bool,
     file_id: FileID,
+    lineno: i32,
 
     quote: Vec<String>,
     in_quote: bool,
 }
 
 impl StateExpression {
-    fn new(file_id: FileID) -> Self {
+    fn new(file_id: FileID, lineno: i32) -> Self {
         StateExpression {
             root: vec![],
             saw_rocket: false,
-            file_id: file_id,
+            file_id,
+            lineno,
             quote: vec![],
             in_quote: false,
         }
@@ -176,15 +192,16 @@ impl TokenHandler for StateExpression {
     fn handle_token(&mut self, token: &Token) -> StackRequest {
         if self.in_quote {
             match *token {
-                Token::Text(s) => self.quote.push(s.to_owned()),
-                Token::Character(c) => self.quote.push(c.to_string()),
-                Token::Quote => {
-                    self.root.push(Node::new_string(self.quote.concat()));
+                Token::Text(_, s) => self.quote.push(s.to_owned()),
+                Token::Character(_, c) => self.quote.push(c.to_string()),
+                Token::Quote(lineno) => {
+                    self.root
+                        .push(Node::new_string(self.quote.concat(), self.file_id, lineno));
 
                     self.in_quote = false;
                     self.quote.clear();
                 }
-                Token::StartBlock => self.quote.push("(:".to_owned()),
+                Token::StartBlock(_) => self.quote.push("(:".to_owned()),
                 Token::RightParen => self.quote.push(")".to_owned()),
                 Token::Rocket => self.quote.push("=>".to_owned()),
                 Token::Indent | Token::Dedent => (),
@@ -193,22 +210,24 @@ impl TokenHandler for StateExpression {
         }
 
         match *token {
-            Token::Text(s) => {
+            Token::Text(lineno, s) => {
                 // When in an expression, whitespace only serves to separate tokens.
                 if !PAT_IS_WHITESPACE.is_match(s) {
-                    self.root.push(Node::new_string(s.to_owned()));
+                    self.root
+                        .push(Node::new_string(s.to_owned(), self.file_id, lineno));
                 }
             }
-            Token::Character(c) => if !c.is_whitespace() {
-                self.root.push(Node::new_string(c.to_string()));
+            Token::Character(lineno, c) => if !c.is_whitespace() {
+                self.root
+                    .push(Node::new_string(c.to_string(), self.file_id, lineno));
             } else {
                 return StackRequest::None;
             },
-            Token::Quote => {
+            Token::Quote(_) => {
                 self.in_quote = true;
             }
-            Token::StartBlock => {
-                return StackRequest::Push(Box::new(StateExpression::new(self.file_id)));
+            Token::StartBlock(lineno) => {
+                return StackRequest::Push(Box::new(StateExpression::new(self.file_id, lineno)));
             }
             Token::Rocket => {
                 self.saw_rocket = true;
@@ -219,7 +238,7 @@ impl TokenHandler for StateExpression {
             }
             Token::Indent => if self.saw_rocket {
                 self.saw_rocket = false;
-                return StackRequest::Push(Box::new(StateRocket::new(self.file_id)));
+                return StackRequest::Push(Box::new(StateRocket::new(self.file_id, self.lineno)));
             },
         }
 
@@ -231,7 +250,11 @@ impl TokenHandler for StateExpression {
     }
 
     fn finish(&mut self) -> Node {
-        Node::new_children(mem::replace(&mut self.root, vec![]))
+        Node::new_children(
+            mem::replace(&mut self.root, vec![]),
+            self.file_id,
+            self.lineno,
+        )
     }
 
     fn push(&mut self, node: Node) {
@@ -248,13 +271,14 @@ struct ParseContextStack {
 }
 
 impl ParseContextStack {
-    fn new(file_id: FileID) -> Self {
+    fn new(file_id: FileID, lineno: i32) -> Self {
         ParseContextStack {
             stack: vec![
                 Box::new(StateRocket {
-                    root: vec![Node::new_string("md")],
+                    root: vec![Node::new_string("md", file_id, lineno)],
                     buffer: vec![],
                     file_id: file_id,
+                    lineno: lineno,
                 }),
             ],
             errors: vec![],
@@ -314,7 +338,7 @@ impl Parser {
         file.read_to_string(&mut data)
             .expect("Failed to read input file");
 
-        let mut stack = ParseContextStack::new(id);
+        let mut stack = ParseContextStack::new(id, 0);
         for token in lex(&data) {
             stack.handle(&token);
             if !stack.errors.is_empty() {

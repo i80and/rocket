@@ -304,9 +304,11 @@ impl DirectiveHandler for Let {
 
                 for pair in children.chunks(2) {
                     let evaluated_key = evaluator.evaluate(&pair[0]);
-                    let evaluated_value = Rc::new(StoredValue::Node(
-                        Node::new_string(evaluator.evaluate(&pair[1])),
-                    ));
+                    let evaluated_value = Rc::new(StoredValue::Node(Node::new_string(
+                        evaluator.evaluate(&pair[1]),
+                        pair[1].file_id,
+                        pair[1].lineno,
+                    )));
 
                     let entry = evaluator.ctx.entry(evaluated_key.to_owned());
                     let original_value = match entry {
@@ -364,9 +366,17 @@ impl DirectiveHandler for Define {
 
         let value = if eager {
             let evaluated = evaluator.evaluate(value_node);
-            Node::new(NodeValue::Owned(evaluated), value_node.file_id)
+            Node::new(
+                NodeValue::Owned(evaluated),
+                value_node.file_id,
+                value_node.lineno,
+            )
         } else {
-            Node::new(value_node.value.clone(), value_node.file_id)
+            Node::new(
+                value_node.value.clone(),
+                value_node.file_id,
+                value_node.lineno,
+            )
         };
 
         evaluator
@@ -534,8 +544,14 @@ impl DirectiveHandler for Steps {
                 NodeValue::Children(ref children) => parse_args(children, evaluator),
             }?;
 
-            let title = md.handle(evaluator, &[Node::new_string(title)])?;
-            let body = md.handle(evaluator, &[Node::new_string(body)])?;
+            let title = md.handle(
+                evaluator,
+                &[Node::new_string(title, step_node.file_id, step_node.lineno)],
+            )?;
+            let body = md.handle(
+                evaluator,
+                &[Node::new_string(body, step_node.file_id, step_node.lineno)],
+            )?;
 
             result.push(Cow::from(
                 r#"<div class="steps__step"><div class="steps__bullet"><div class="steps__stepnumber">"#,
@@ -556,6 +572,15 @@ impl DirectiveHandler for Steps {
 mod tests {
     use super::*;
 
+
+    fn node_string(s: &str) -> Node {
+        Node::new_string(s, 0, -1)
+    }
+
+    fn node_children(nodes: Vec<Node>) -> Node {
+        Node::new_children(nodes, 0, -1)
+    }
+
     #[test]
     fn test_dummy() {
         let mut evaluator = Evaluator::new();
@@ -563,14 +588,11 @@ mod tests {
 
         assert_eq!(handler.handle(&mut evaluator, &[]), Ok("".to_owned()));
         assert_eq!(
-            handler.handle(&mut evaluator, &[Node::new_string("")]),
+            handler.handle(&mut evaluator, &[node_string("")]),
             Ok("".to_owned())
         );
         assert_eq!(
-            handler.handle(
-                &mut evaluator,
-                &[Node::new_children(vec![Node::new_string("")])]
-            ),
+            handler.handle(&mut evaluator, &[node_children(vec![node_string("")])]),
             Ok("".to_owned())
         );
     }
@@ -583,15 +605,15 @@ mod tests {
 
         assert_eq!(handler.handle(&mut evaluator, &[]), Ok("3.4.0".to_owned()));
         assert_eq!(
-            handler.handle(&mut evaluator, &[Node::new_string("")]),
+            handler.handle(&mut evaluator, &[node_string("")]),
             Ok("".to_owned())
         );
         assert_eq!(
-            handler.handle(&mut evaluator, &[Node::new_string("x")]),
+            handler.handle(&mut evaluator, &[node_string("x")]),
             Ok("3".to_owned())
         );
         assert_eq!(
-            handler.handle(&mut evaluator, &[Node::new_string("x.y")]),
+            handler.handle(&mut evaluator, &[node_string("x.y")]),
             Ok("3.4".to_owned())
         );
 
@@ -599,10 +621,10 @@ mod tests {
             handler.handle(
                 &mut evaluator,
                 &[
-                    Node::new_children(vec![
-                        Node::new_string("concat"),
-                        Node::new_string("3."),
-                        Node::new_string("4"),
+                    node_children(vec![
+                        node_string("concat"),
+                        node_string("3."),
+                        node_string("4"),
                     ])
                 ]
             ),
@@ -618,7 +640,7 @@ mod tests {
         assert!(handler.handle(&mut evaluator, &[]).is_err());
         assert!(
             handler
-                .handle(&mut evaluator, &[Node::new_string("foo")])
+                .handle(&mut evaluator, &[node_string("foo")])
                 .is_ok()
         );
     }
@@ -631,17 +653,13 @@ mod tests {
 
         assert_eq!(handler.handle(&mut evaluator, &[]), Ok("".to_owned()));
         assert_eq!(
-            handler.handle(&mut evaluator, &[Node::new_string("foo")]),
+            handler.handle(&mut evaluator, &[node_string("foo")]),
             Ok("foo".to_owned())
         );
         assert_eq!(
             handler.handle(
                 &mut evaluator,
-                &[
-                    Node::new_string("foo"),
-                    Node::new_string("bar"),
-                    Node::new_string("baz")
-                ]
+                &[node_string("foo"), node_string("bar"), node_string("baz")]
             ),
             Ok("foobarbaz".to_owned())
         );
@@ -650,8 +668,8 @@ mod tests {
             handler.handle(
                 &mut evaluator,
                 &[
-                    Node::new_children(vec![Node::new_string("version")]),
-                    Node::new_string("-test")
+                    node_children(vec![node_string("version")]),
+                    node_string("-test")
                 ]
             ),
             Ok("3.4-test".to_owned())
@@ -665,7 +683,7 @@ mod tests {
 
         assert_eq!(handler.handle(&mut evaluator, &[]), Ok("".to_owned()));
         assert_eq!(
-            handler.handle(&mut evaluator, &[Node::new_string("Some *markdown* text")]),
+            handler.handle(&mut evaluator, &[node_string("Some *markdown* text")]),
             Ok("<p>Some <em>markdown</em> text</p>".to_owned())
         );
     }
@@ -680,8 +698,8 @@ mod tests {
 
         assert!(handler.handle(&mut evaluator, &[]).is_err());
         assert_eq!(handler.handle(&mut evaluator, &[
-            Node::new_string("SIMD.js Rectangle Intersection"),
-            Node::new_string("/simd-rectangle-intersection/")]),
+            node_string("SIMD.js Rectangle Intersection"),
+            node_string("/simd-rectangle-intersection/")]),
                    Ok(r#"[SIMD.js Rectangle Intersection](https://foxquill.com/simd-rectangle-intersection/ "")"#.to_owned()));
     }
 
@@ -696,18 +714,18 @@ mod tests {
         let result = handler.handle(
             &mut evaluator,
             &[
-                Node::new_children(vec![
-                    Node::new_string("foo"),
-                    Node::new_children(vec![
-                        Node::new_string("concat"),
-                        Node::new_string("1"),
-                        Node::new_string("2"),
+                node_children(vec![
+                    node_string("foo"),
+                    node_children(vec![
+                        node_string("concat"),
+                        node_string("1"),
+                        node_string("2"),
                     ]),
-                    Node::new_string("bar"),
-                    Node::new_string("3"),
+                    node_string("bar"),
+                    node_string("3"),
                 ]),
-                Node::new_children(vec![Node::new_string("foo")]),
-                Node::new_children(vec![Node::new_string("bar")]),
+                node_children(vec![node_string("foo")]),
+                node_children(vec![node_string("bar")]),
             ],
         );
 
@@ -721,10 +739,7 @@ mod tests {
         let handler = Define;
 
         assert_eq!(
-            handler.handle(
-                &mut evaluator,
-                &[Node::new_string("foo"), Node::new_string("foo")]
-            ),
+            handler.handle(&mut evaluator, &[node_string("foo"), node_string("foo")]),
             Ok("".to_owned())
         );
 
@@ -733,11 +748,11 @@ mod tests {
             handler.handle(
                 &mut evaluator,
                 &[
-                    Node::new_string("x"),
-                    Node::new_children(vec![
-                        Node::new_string("concat"),
-                        Node::new_children(vec![Node::new_string("foo")]),
-                        Node::new_string("bar"),
+                    node_string("x"),
+                    node_children(vec![
+                        node_string("concat"),
+                        node_children(vec![node_string("foo")]),
+                        node_string("bar"),
                     ])
                 ]
             ),
@@ -745,10 +760,7 @@ mod tests {
         );
 
         assert_eq!(
-            handler.handle(
-                &mut evaluator,
-                &[Node::new_string("foo"), Node::new_string("bar")]
-            ),
+            handler.handle(&mut evaluator, &[node_string("foo"), node_string("bar")]),
             Ok("".to_owned())
         );
 
@@ -756,54 +768,45 @@ mod tests {
             handler.handle(
                 &mut evaluator,
                 &[
-                    Node::new_string("evaluate"),
-                    Node::new_string("eager"),
-                    Node::new_children(vec![Node::new_string("x")])
+                    node_string("evaluate"),
+                    node_string("eager"),
+                    node_children(vec![node_string("x")])
                 ]
             ),
             Ok("".to_owned())
         );
 
         assert_eq!(
-            evaluator
-                .lookup(&Node::new_string(""), "x", &vec![])
-                .unwrap(),
+            evaluator.lookup(&node_string(""), "x", &vec![]).unwrap(),
             "barbar".to_owned()
         );
 
         assert_eq!(
             evaluator
-                .lookup(&Node::new_string(""), "eager", &vec![])
+                .lookup(&node_string(""), "eager", &vec![])
                 .unwrap(),
             "barbar".to_owned()
         );
 
         assert_eq!(
-            evaluator
-                .lookup(&Node::new_string(""), "foo", &vec![])
-                .unwrap(),
+            evaluator.lookup(&node_string(""), "foo", &vec![]).unwrap(),
             "bar".to_owned()
         );
 
         // Now change foo to make sure x changes but eager does not
         assert_eq!(
-            handler.handle(
-                &mut evaluator,
-                &[Node::new_string("foo"), Node::new_string("baz")]
-            ),
+            handler.handle(&mut evaluator, &[node_string("foo"), node_string("baz")]),
             Ok("".to_owned())
         );
 
         assert_eq!(
-            evaluator
-                .lookup(&Node::new_string(""), "x", &vec![])
-                .unwrap(),
+            evaluator.lookup(&node_string(""), "x", &vec![]).unwrap(),
             "bazbar".to_owned()
         );
 
         assert_eq!(
             evaluator
-                .lookup(&Node::new_string(""), "eager", &vec![])
+                .lookup(&node_string(""), "eager", &vec![])
                 .unwrap(),
             "barbar".to_owned()
         );
@@ -816,10 +819,7 @@ mod tests {
 
         assert_eq!(handler.handle(&mut evaluator, &[]), Ok("".to_owned()));
         assert_eq!(
-            handler.handle(
-                &mut evaluator,
-                &[Node::new_string("foo"), Node::new_string("bar")]
-            ),
+            handler.handle(&mut evaluator, &[node_string("foo"), node_string("bar")]),
             Ok("".to_owned())
         );
         assert_eq!(
@@ -838,7 +838,7 @@ mod tests {
         assert_eq!(
             handler.handle(
                 &mut evaluator,
-                &[Node::new_string("a-title"), Node::new_string("A Title")]
+                &[node_string("a-title"), node_string("A Title")]
             ),
             Ok("\n## A Title\n".to_owned())
         );
@@ -857,13 +857,13 @@ mod tests {
         assert!(handler.handle(&mut evaluator, &[]).is_err());
         assert!(
             handler
-                .handle(&mut evaluator, &[Node::new_string("a-title")])
+                .handle(&mut evaluator, &[node_string("a-title")])
                 .is_err()
         );
         assert_eq!(
             handler.handle(
                 &mut evaluator,
-                &[Node::new_string("a-title"), Node::new_string("A Title")]
+                &[node_string("a-title"), node_string("A Title")]
             ),
             Ok(String::new())
         );

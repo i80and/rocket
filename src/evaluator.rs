@@ -138,9 +138,14 @@ impl Evaluator {
         let file_path = self.parser.get_node_source_path(node);
         log!(
             level,
-            "{}\n  --> {}:?:?",
+            "{}\n  --> {}:{}:?",
             message,
-            file_path.unwrap_or_else(|| Path::new("")).to_string_lossy()
+            file_path.unwrap_or_else(|| Path::new("")).to_string_lossy(),
+            if node.lineno >= 0 {
+                node.lineno.to_string()
+            } else {
+                "?".to_owned()
+            }
         );
     }
 

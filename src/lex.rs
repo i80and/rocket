@@ -1,3 +1,4 @@
+use bytecount::naive_count_32;
 use regex::Regex;
 
 lazy_static! {
@@ -15,32 +16,37 @@ lazy_static! {
 
 #[derive(Debug, PartialEq)]
 pub enum Token<'a> {
-    StartBlock,
+    StartBlock(i32),
     RightParen,
     Rocket,
     Indent,
     Dedent,
-    Text(&'a str),
-    Character(char),
-    Quote,
+    Text(i32, &'a str),
+    Character(i32, char),
+    Quote(i32),
 }
 
 pub fn lex(data: &str) -> Vec<Token> {
+    let data_bytes = data.as_bytes();
+    let mut lineno: i32 = 0;
+    let mut last_match_start: usize = 0;
     let mut tokens: Vec<Token> = vec![];
     let mut indent: Vec<usize> = vec![0];
     let mut start_rocket = false;
 
     for pat_match in PAT_TOKENS.find_iter(data) {
+        lineno += naive_count_32(&data_bytes[last_match_start..pat_match.start()], b'\n') as i32;
+        last_match_start = pat_match.start();
         let token_text = pat_match.as_str();
         let bytes = token_text.as_bytes();
         let token = match bytes[0] {
             b')' => Token::RightParen,
-            b'"' => Token::Quote,
+            b'"' => Token::Quote(lineno),
             b'\n' => {
-                tokens.push(Token::Character('\n'));
+                tokens.push(Token::Character(lineno, '\n'));
 
                 // If the line is empty, ignore it.
-                if data.as_bytes().get(pat_match.end()) == Some(&b'\n') {
+                if data_bytes.get(pat_match.end()) == Some(&b'\n') {
                     continue;
                 }
 
@@ -60,14 +66,14 @@ pub fn lex(data: &str) -> Vec<Token> {
                     indent.push(new_indentation_level);
                     tokens.push(Token::Indent);
                     start_rocket = false;
-                    Token::Text(&token_text[new_indentation_level..])
+                    Token::Text(lineno, &token_text[new_indentation_level..])
                 } else {
                     continue;
                 }
             }
             b'(' => match bytes.get(1) {
-                Some(&b':') => Token::StartBlock,
-                None => Token::Character('('),
+                Some(&b':') => Token::StartBlock(lineno),
+                None => Token::Character(lineno, '('),
                 _ => panic!("Bad character matched: Expected ':' or nothing"),
             },
             b'=' => match bytes.get(1) {
@@ -75,10 +81,10 @@ pub fn lex(data: &str) -> Vec<Token> {
                     start_rocket = true;
                     Token::Rocket
                 }
-                None => Token::Character('='),
+                None => Token::Character(lineno, '='),
                 _ => panic!("Bad character matched: Expected '>' or nothing"),
             },
-            _ => Token::Text(token_text),
+            _ => Token::Text(lineno, token_text),
         };
 
         tokens.push(token)
@@ -106,25 +112,25 @@ mod tests {
         assert_eq!(
             lex(r#"(:foo bar (:a "b c") "baz" )"#),
             vec![
-                Token::StartBlock,
-                Token::Text("foo"),
-                Token::Text(" "),
-                Token::Text("bar"),
-                Token::Text(" "),
-                Token::StartBlock,
-                Token::Text("a"),
-                Token::Text(" "),
-                Token::Quote,
-                Token::Text("b"),
-                Token::Text(" "),
-                Token::Text("c"),
-                Token::Quote,
+                Token::StartBlock(0),
+                Token::Text(0, "foo"),
+                Token::Text(0, " "),
+                Token::Text(0, "bar"),
+                Token::Text(0, " "),
+                Token::StartBlock(0),
+                Token::Text(0, "a"),
+                Token::Text(0, " "),
+                Token::Quote(0),
+                Token::Text(0, "b"),
+                Token::Text(0, " "),
+                Token::Text(0, "c"),
+                Token::Quote(0),
                 Token::RightParen,
-                Token::Text(" "),
-                Token::Quote,
-                Token::Text("baz"),
-                Token::Quote,
-                Token::Text(" "),
+                Token::Text(0, " "),
+                Token::Quote(0),
+                Token::Text(0, "baz"),
+                Token::Quote(0),
+                Token::Text(0, " "),
                 Token::RightParen,
             ]
         );
@@ -149,52 +155,52 @@ mod tests {
 "#
             ),
             vec![
-                Token::Character('\n'),
-                Token::StartBlock,
-                Token::Text("note"),
-                Token::Text(" "),
-                Token::Quote,
-                Token::Text("a"),
-                Token::Text(" "),
-                Token::Text("title"),
-                Token::Quote,
-                Token::Text(" "),
+                Token::Character(0, '\n'),
+                Token::StartBlock(1),
+                Token::Text(1, "note"),
+                Token::Text(1, " "),
+                Token::Quote(1),
+                Token::Text(1, "a"),
+                Token::Text(1, " "),
+                Token::Text(1, "title"),
+                Token::Quote(1),
+                Token::Text(1, " "),
                 Token::Rocket,
-                Token::Character('\n'),
+                Token::Character(1, '\n'),
                 Token::Indent,
-                Token::Text(" "),
-                Token::Text("stuff"),
-                Token::Text(" "),
-                Token::Text("1"),
-                Token::Character('\n'),
-                Token::Character('\n'),
-                Token::Text("stuff"),
-                Token::Text(" "),
-                Token::Text("2"),
-                Token::Character('\n'),
-                Token::Character('\n'),
-                Token::StartBlock,
-                Token::Text("note"),
-                Token::Text(" "),
+                Token::Text(1, " "),
+                Token::Text(2, "stuff"),
+                Token::Text(2, " "),
+                Token::Text(2, "1"),
+                Token::Character(2, '\n'),
+                Token::Character(3, '\n'),
+                Token::Text(4, "stuff"),
+                Token::Text(4, " "),
+                Token::Text(4, "2"),
+                Token::Character(4, '\n'),
+                Token::Character(5, '\n'),
+                Token::StartBlock(6),
+                Token::Text(6, "note"),
+                Token::Text(6, " "),
                 Token::Rocket,
-                Token::Character('\n'),
+                Token::Character(6, '\n'),
                 Token::Indent,
-                Token::Text(" "),
-                Token::Text("more"),
-                Token::Text(" "),
-                Token::Text("stuff"),
-                Token::Character('\n'),
-                Token::Character('\n'),
-                Token::Text("second"),
-                Token::Text(" "),
-                Token::Text("paragraph"),
-                Token::Character('\n'),
-                Token::Character('\n'),
+                Token::Text(6, " "),
+                Token::Text(7, "more"),
+                Token::Text(7, " "),
+                Token::Text(7, "stuff"),
+                Token::Character(7, '\n'),
+                Token::Character(8, '\n'),
+                Token::Text(9, "second"),
+                Token::Text(9, " "),
+                Token::Text(9, "paragraph"),
+                Token::Character(9, '\n'),
+                Token::Character(10, '\n'),
                 Token::Dedent,
-                Token::Text("closing"),
-                Token::Text(" "),
-                Token::Text("nested"),
-                Token::Character('\n'),
+                Token::Text(11, "closing"),
+                Token::Text(11, " "),
+                Token::Text(11, "nested"),
+                Token::Character(11, '\n'),
                 Token::Dedent,
             ]
         );
