@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::fs::File;
 use std::io::prelude::*;
 use std::mem;
@@ -72,7 +71,7 @@ enum StackRequest {
     None,
     Pop(u8),
     Push(Box<TokenHandler>),
-    Error(Cow<'static, str>),
+    Error(&'static str, i32),
 }
 
 trait TokenHandler {
@@ -134,7 +133,9 @@ impl TokenHandler for StateRocket {
             Token::Rocket => {
                 self.ensure_string().push_str("=>");
             }
-            Token::Indent => return StackRequest::Error(Cow::from("Unexpected indentation token")),
+            Token::Indent => {
+                return StackRequest::Error("Unexpected indentation token", self.lineno)
+            }
             Token::Dedent => {
                 // We need to pop both the rocket and the expression that started the rocket
                 return StackRequest::Pop(2);
@@ -160,6 +161,7 @@ impl TokenHandler for StateRocket {
     fn push(&mut self, node: Node) {
         self.root.push(node);
     }
+
     fn name(&self) -> &'static str {
         "rocket"
     }
@@ -243,7 +245,7 @@ impl TokenHandler for StateExpression {
         }
 
         if self.saw_rocket {
-            return StackRequest::Error(Cow::from("Expected indentation after =>"));
+            return StackRequest::Error("Expected indentation after =>", self.lineno);
         }
 
         StackRequest::None
@@ -260,6 +262,7 @@ impl TokenHandler for StateExpression {
     fn push(&mut self, node: Node) {
         self.root.push(node);
     }
+
     fn name(&self) -> &'static str {
         "expression"
     }
@@ -267,7 +270,7 @@ impl TokenHandler for StateExpression {
 
 struct ParseContextStack {
     stack: Vec<Box<TokenHandler>>,
-    errors: Vec<Cow<'static, str>>,
+    errors: Vec<(&'static str, i32)>,
 }
 
 impl ParseContextStack {
@@ -299,7 +302,7 @@ impl ParseContextStack {
                 (**self.stack.last_mut().expect("Empty parse stack")).push(handler.finish());
             },
             StackRequest::None => (),
-            StackRequest::Error(msg) => self.errors.push(msg),
+            StackRequest::Error(msg, lineno) => self.errors.push((msg, lineno)),
         }
     }
 }
@@ -320,7 +323,7 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self, path: &Path) -> Result<Node, Cow<'static, str>> {
+    pub fn parse(&mut self, path: &Path) -> Result<Node, String> {
         debug!("Parsing {}", path.to_string_lossy());
 
         let id = self.file_ids.len() as FileID;
@@ -329,9 +332,7 @@ impl Parser {
         let mut file = match File::open(path) {
             Ok(f) => f,
             Err(_) => {
-                return Err(Cow::from(
-                    format!("Failed to open {}", path.to_string_lossy()),
-                ));
+                return Err(format!("Failed to open {}", path.to_string_lossy()));
             }
         };
         let mut data = String::new();
@@ -342,14 +343,18 @@ impl Parser {
         for token in lex(&data) {
             stack.handle(&token);
             if !stack.errors.is_empty() {
-                return Err(stack.errors[0].clone());
+                let (msg, lineno) = stack.errors[0];
+                return Err(format!("{}: line {}", msg, lineno));
             }
         }
 
         let root = stack.stack.pop().expect("Empty state stack").finish();
-        if !stack.stack.is_empty() {
-            return Err(Cow::from("Unterminated block"));
+        match stack.stack.pop() {
+            Some(_) => Err(format!(
+                "Unterminated block started on line {}",
+                root.lineno
+            )),
+            None => Ok(root),
         }
-        Ok(root)
     }
 }
