@@ -37,9 +37,10 @@ pub fn lex(data: &str) -> Vec<Token> {
             b')' => Token::RightParen,
             b'"' => Token::Quote,
             b'\n' => {
+                tokens.push(Token::Character('\n'));
+
                 // If the line is empty, ignore it.
                 if data.as_bytes().get(pat_match.end()) == Some(&b'\n') {
-                    tokens.push(Token::Character('\n'));
                     continue;
                 }
 
@@ -61,7 +62,7 @@ pub fn lex(data: &str) -> Vec<Token> {
                     start_rocket = false;
                     Token::Text(&token_text[new_indentation_level..])
                 } else {
-                    Token::Text(&token_text[new_indentation_level..])
+                    continue;
                 }
             }
             b'(' => match bytes.get(1) {
@@ -142,11 +143,13 @@ mod tests {
   (:note =>
     more stuff
 
+    second paragraph
+
   closing nested
 "#
             ),
             vec![
-                Token::Text("\n"),
+                Token::Character('\n'),
                 Token::StartBlock,
                 Token::Text("note"),
                 Token::Text(" "),
@@ -157,35 +160,42 @@ mod tests {
                 Token::Quote,
                 Token::Text(" "),
                 Token::Rocket,
+                Token::Character('\n'),
                 Token::Indent,
                 Token::Text(" "),
                 Token::Text("stuff"),
                 Token::Text(" "),
                 Token::Text("1"),
                 Token::Character('\n'),
-                Token::Text(" "),
+                Token::Character('\n'),
                 Token::Text("stuff"),
                 Token::Text(" "),
                 Token::Text("2"),
                 Token::Character('\n'),
-                Token::Text(" "),
+                Token::Character('\n'),
                 Token::StartBlock,
                 Token::Text("note"),
                 Token::Text(" "),
                 Token::Rocket,
+                Token::Character('\n'),
                 Token::Indent,
                 Token::Text(" "),
                 Token::Text("more"),
                 Token::Text(" "),
                 Token::Text("stuff"),
                 Token::Character('\n'),
-                Token::Dedent,
+                Token::Character('\n'),
+                Token::Text("second"),
                 Token::Text(" "),
+                Token::Text("paragraph"),
+                Token::Character('\n'),
+                Token::Character('\n'),
+                Token::Dedent,
                 Token::Text("closing"),
                 Token::Text(" "),
                 Token::Text("nested"),
+                Token::Character('\n'),
                 Token::Dedent,
-                Token::Text("\n"),
             ]
         );
     }

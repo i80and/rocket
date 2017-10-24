@@ -197,9 +197,11 @@ impl TokenHandler for StateExpression {
                     self.root.push(Node::new_string(s.to_owned()));
                 }
             }
-            Token::Character(c) => {
+            Token::Character(c) => if !c.is_whitespace() {
                 self.root.push(Node::new_string(c.to_string()));
-            }
+            } else {
+                return StackRequest::None;
+            },
             Token::Quote => {
                 self.in_quote = true;
             }
