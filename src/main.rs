@@ -260,18 +260,21 @@ fn build(verbose: bool) {
     evaluator.register_prelude("toctree", Box::new(directives::TocTree));
     evaluator.register_prelude("define-ref", Box::new(directives::RefDefDirective));
     evaluator.register_prelude("ref", Box::new(directives::RefDirective));
-    evaluator.register_prelude("if", Box::new(logic::If));
-    evaluator.register_prelude("not", Box::new(logic::Not));
-    evaluator.register_prelude("=", Box::new(logic::Equals));
-    evaluator.register_prelude("!=", Box::new(logic::NotEquals));
+    evaluator.register_prelude("figure", Box::new(directives::Figure));
 
-
+    // Headers
     evaluator.register_prelude("h1", Box::new(directives::Heading::new(1)));
     evaluator.register_prelude("h2", Box::new(directives::Heading::new(2)));
     evaluator.register_prelude("h3", Box::new(directives::Heading::new(3)));
     evaluator.register_prelude("h4", Box::new(directives::Heading::new(4)));
     evaluator.register_prelude("h5", Box::new(directives::Heading::new(5)));
     evaluator.register_prelude("h6", Box::new(directives::Heading::new(6)));
+
+    // Logic operations
+    evaluator.register_prelude("if", Box::new(logic::If));
+    evaluator.register_prelude("not", Box::new(logic::Not));
+    evaluator.register_prelude("=", Box::new(logic::Equals));
+    evaluator.register_prelude("!=", Box::new(logic::NotEquals));
 
     let start_time = time::precise_time_ns();
     config.build_project(&mut evaluator);

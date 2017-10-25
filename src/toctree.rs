@@ -79,7 +79,7 @@ impl TocTree {
                 .ok_or_else(|| format!("Failed to find toctree root '{}'", &self.root))?;
             result.push(Cow::Owned(format!(
                 r#"<a href="{}">{}</a>"#,
-                current_slug.path_to(&Slug::new("".to_owned()), self.pretty_url),
+                current_slug.path_to("", self.pretty_url),
                 title
             )));
             result.push(Cow::Borrowed("</li>"));
@@ -101,7 +101,7 @@ impl TocTree {
 
             result.push(Cow::Owned(format!(
                 r#"<a href="{}">{}</a>"#,
-                current_slug.path_to(&child.slug, self.pretty_url),
+                current_slug.path_to(child.slug.as_ref(), self.pretty_url),
                 title
             )));
             result.extend(self.generate_html(&child.slug, current_slug, false)?);

@@ -21,6 +21,10 @@ fn consume_string(iter: &mut slice::Iter<Node>, evaluator: &mut Evaluator) -> Op
     }
 }
 
+fn escape_string(s: &str) -> String {
+    s.chars().flat_map(|c| c.escape_default()).collect()
+}
+
 pub trait DirectiveHandler {
     fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()>;
 }
@@ -570,6 +574,33 @@ impl DirectiveHandler for Steps {
     }
 }
 
+pub struct Figure;
+
+impl DirectiveHandler for Figure {
+    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+        let mut iter = args.iter();
+        let src = escape_string(&consume_string(&mut iter, evaluator).ok_or(())?);
+        let src = evaluator.add_asset(&src)?;
+        let alt = escape_string(&consume_string(&mut iter, evaluator).ok_or(())?);
+
+        let width = consume_string(&mut iter, evaluator);
+        let width_term = match width {
+            Some(ref s) => {
+                let width_integer = s.parse::<u16>().ok().ok_or(())?;
+                Cow::from(format!(" width={}px", width_integer))
+            }
+            None => Cow::from(""),
+        };
+
+        Ok(format!(
+            r#"<img src="{}" alt="{}"{}>"#,
+            src,
+            alt,
+            width_term
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -871,6 +902,47 @@ mod tests {
         assert_eq!(
             evaluator.refdefs.get("a-title").unwrap().title,
             "A Title".to_owned()
+        );
+    }
+
+    #[test]
+    fn test_figure() {
+        let mut evaluator = Evaluator::new();
+        evaluator.set_slug(Slug::new("index".to_owned()));
+        let handler = Figure;
+
+        assert!(handler.handle(&mut evaluator, &[]).is_err());
+        assert!(
+            handler
+                .handle(&mut evaluator, &[node_string("foo.png")])
+                .is_err()
+        );
+        assert_eq!(
+            handler.handle(
+                &mut evaluator,
+                &[node_string("fo\"o.png"), node_string("al\"t")]
+            ),
+            Ok(r#"<img src="_static/fo\"o.png" alt="al\"t">"#.to_owned())
+        );
+        assert_eq!(
+            handler.handle(
+                &mut evaluator,
+                &[
+                    node_string("fo\"o.png"),
+                    node_string("al\"t"),
+                    node_string("320")
+                ]
+            ),
+            Ok(r#"<img src="_static/fo\"o.png" alt="al\"t" width=320px>"#.to_owned())
+        );
+
+        evaluator.set_slug(Slug::new("reference/directives".to_owned()));
+        assert_eq!(
+            handler.handle(
+                &mut evaluator,
+                &[node_string("foo.png"), node_string("foo")]
+            ),
+            Ok(r#"<img src="../../_static/foo.png" alt="foo">"#.to_owned())
         );
     }
 }

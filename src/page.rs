@@ -1,3 +1,4 @@
+use std::convert;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use serde_json::{self, Value};
@@ -31,9 +32,15 @@ impl Slug {
         self.slug.matches('/').count() + modifier
     }
 
-    pub fn path_to(&self, dest: &Slug, pretty_url: bool) -> String {
+    pub fn path_to(&self, dest: &str, pretty_url: bool) -> String {
         let slug_prefix = "../".repeat(self.depth(pretty_url));
-        format!("{}{}", slug_prefix, &dest.slug)
+        format!("{}{}", slug_prefix, dest)
+    }
+}
+
+impl convert::AsRef<str> for Slug {
+    fn as_ref(&self) -> &str {
+        &self.slug
     }
 }
 

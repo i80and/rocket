@@ -112,6 +112,14 @@ impl Evaluator {
             .insert(name.into(), Rc::new(StoredValue::Directive(handler)));
     }
 
+    pub fn add_asset(&self, path: &str) -> Result<String, ()> {
+        let output_slug = Slug::new(format!("_static/{}", path));
+        let slug = self.current_slug
+            .as_ref()
+            .expect("current_slug not yet initialized");
+        Ok(slug.path_to(output_slug.as_ref(), true))
+    }
+
     pub fn evaluate(&mut self, node: &Node) -> String {
         match node.value {
             NodeValue::Owned(ref s) => s.to_owned(),
@@ -197,7 +205,7 @@ impl Evaluator {
                 };
 
                 match *action {
-                    PlaceholderAction::Path => page.slug.path_to(&refdef.slug, true),
+                    PlaceholderAction::Path => page.slug.path_to(refdef.slug.as_ref(), true),
                     PlaceholderAction::Title => refdef.title.to_owned(),
                 }
             });

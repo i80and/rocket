@@ -45,7 +45,7 @@ default = "default.html"
 </html>
 "#;
 
-    let gitignore = "build/\n";
+    let gitignore = "build/\n.rocket-cache/";
 
     let mut f = File::create(format!("{}/config.toml", name)).expect("Unable to create file");
     f.write_all(config_toml.as_bytes())
