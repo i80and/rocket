@@ -66,10 +66,9 @@ pub fn lex(data: &str) -> Vec<Token> {
                     indent.push(new_indentation_level);
                     tokens.push(Token::Indent);
                     start_rocket = false;
-                    Token::Text(lineno, &token_text[new_indentation_level..])
-                } else {
-                    continue;
                 }
+
+                continue;
             }
             b'(' => match bytes.get(1) {
                 Some(&b':') => Token::StartBlock(lineno),
@@ -168,7 +167,6 @@ mod tests {
                 Token::Rocket,
                 Token::Character(1, '\n'),
                 Token::Indent,
-                Token::Text(1, " "),
                 Token::Text(2, "stuff"),
                 Token::Text(2, " "),
                 Token::Text(2, "1"),
@@ -185,7 +183,6 @@ mod tests {
                 Token::Rocket,
                 Token::Character(6, '\n'),
                 Token::Indent,
-                Token::Text(6, " "),
                 Token::Text(7, "more"),
                 Token::Text(7, " "),
                 Token::Text(7, "stuff"),
