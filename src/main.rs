@@ -40,6 +40,7 @@ use std::path::{Path, PathBuf};
 use evaluator::Evaluator;
 use page::{Page, Slug};
 use toctree::TocTree;
+use directives::logic;
 
 #[derive(Debug)]
 enum LinkError {
@@ -259,6 +260,11 @@ fn build(verbose: bool) {
     evaluator.register_prelude("toctree", Box::new(directives::TocTree));
     evaluator.register_prelude("define-ref", Box::new(directives::RefDefDirective));
     evaluator.register_prelude("ref", Box::new(directives::RefDirective));
+    evaluator.register_prelude("if", Box::new(logic::If));
+    evaluator.register_prelude("not", Box::new(logic::Not));
+    evaluator.register_prelude("=", Box::new(logic::Equals));
+    evaluator.register_prelude("!=", Box::new(logic::NotEquals));
+
 
     evaluator.register_prelude("h1", Box::new(directives::Heading::new(1)));
     evaluator.register_prelude("h2", Box::new(directives::Heading::new(2)));

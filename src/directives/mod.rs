@@ -9,6 +9,8 @@ use parse::{Node, NodeValue};
 use page::Slug;
 use evaluator::{Evaluator, PlaceholderAction, RefDef, StoredValue};
 
+pub mod logic;
+
 fn consume_string(iter: &mut slice::Iter<Node>, evaluator: &mut Evaluator) -> Option<String> {
     match iter.next() {
         Some(n) => match n.value {
@@ -571,7 +573,6 @@ impl DirectiveHandler for Steps {
 #[cfg(test)]
 mod tests {
     use super::*;
-
 
     fn node_string(s: &str) -> Node {
         Node::new_string(s, 0, -1)
