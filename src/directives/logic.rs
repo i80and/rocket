@@ -84,6 +84,7 @@ impl DirectiveHandler for NotEquals {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use directives::*;
 
 
     fn node_string(s: &str) -> Node {
@@ -97,7 +98,7 @@ mod tests {
     #[test]
     fn test_if() {
         let mut evaluator = Evaluator::new();
-        evaluator.register("concat", Box::new(directives::Concat));
+        evaluator.register("concat", Box::new(Concat));
         let handler = If;
 
         assert!(handler.handle(&mut evaluator, &[]).is_err());
@@ -140,7 +141,7 @@ mod tests {
     #[test]
     fn test_not() {
         let mut evaluator = Evaluator::new();
-        evaluator.register("concat", Box::new(directives::Concat));
+        evaluator.register("concat", Box::new(Concat));
         let handler = Not;
 
         assert!(handler.handle(&mut evaluator, &[]).is_err());
@@ -178,7 +179,7 @@ mod tests {
     #[test]
     fn test_equals() {
         let mut evaluator = Evaluator::new();
-        evaluator.register("concat", Box::new(directives::Concat));
+        evaluator.register("concat", Box::new(Concat));
         let handler = Equals;
 
         assert!(handler.handle(&mut evaluator, &[]).is_err());
@@ -220,7 +221,7 @@ mod tests {
     #[test]
     fn test_not_equals() {
         let mut evaluator = Evaluator::new();
-        evaluator.register("concat", Box::new(directives::Concat));
+        evaluator.register("concat", Box::new(Concat));
         let handler = NotEquals;
 
         assert!(handler.handle(&mut evaluator, &[]).is_err());
