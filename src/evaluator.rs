@@ -10,7 +10,6 @@ use rand::Rng;
 use regex::{Captures, Regex};
 use directives;
 use highlighter::{self, SyntaxHighlighter};
-use markdown;
 use page::{Page, Slug};
 use parse::{Node, NodeValue, Parser};
 use toctree::TocTree;
@@ -111,7 +110,6 @@ impl Evaluator {
 }
 
 pub struct Worker<'a> {
-    pub markdown: markdown::MarkdownRenderer,
     pub highlighter: SyntaxHighlighter,
 
     current_slug: Option<Slug>,
@@ -130,19 +128,13 @@ impl<'a> Worker<'a> {
 
     pub fn new_with_options(evaluator: &'a Evaluator, syntax_theme: &str) -> Self {
         Worker {
-            markdown: markdown::MarkdownRenderer::new(),
             highlighter: SyntaxHighlighter::new(syntax_theme),
-
             current_slug: None,
             parser: Parser::new(),
             evaluator: evaluator,
             ctx: HashMap::new(),
             theme_config: serde_json::map::Map::new(),
         }
-    }
-
-    pub fn render_markdown(&self, md: &str) -> (String, String) {
-        self.markdown.render(md, &self.highlighter)
     }
 
     pub fn evaluate(&mut self, node: &Node) -> String {

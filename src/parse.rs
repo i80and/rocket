@@ -278,7 +278,7 @@ impl ParseContextStack {
         ParseContextStack {
             stack: vec![
                 Box::new(StateRocket {
-                    root: vec![Node::new_string("md", file_id, lineno)],
+                    root: vec![Node::new_string("concat", file_id, lineno)],
                     buffer: vec![],
                     file_id: file_id,
                     lineno: lineno,

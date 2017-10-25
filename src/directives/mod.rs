@@ -25,6 +25,10 @@ fn escape_string(s: &str) -> String {
     s.chars().flat_map(|c| c.escape_default()).collect()
 }
 
+fn concat_nodes(iter: &mut slice::Iter<Node>, worker: &mut Worker) -> String {
+    iter.map(|node| worker.evaluate(node))
+        .fold(String::new(), |r, c| r + &c)
+}
 
 pub trait DirectiveHandler {
     fn handle(&self, worker: &mut Worker, args: &[Node]) -> Result<String, ()>;
@@ -36,6 +40,22 @@ impl DirectiveHandler for Dummy {
     #[allow(unused_variables)]
     fn handle(&self, worker: &mut Worker, args: &[Node]) -> Result<String, ()> {
         Ok("".to_owned())
+    }
+}
+
+pub struct Code;
+
+impl DirectiveHandler for Code {
+    fn handle(&self, worker: &mut Worker, args: &[Node]) -> Result<String, ()> {
+        let mut iter = args.iter();
+        let language = consume_string(&mut iter, worker).ok_or(())?;
+        let literal = concat_nodes(&mut iter, worker);
+
+        worker
+            .highlighter
+            .highlight(&language, &literal)
+            .ok()
+            .ok_or(())
     }
 }
 
@@ -95,13 +115,12 @@ impl DirectiveHandler for Admonition {
             _ => return Err(()),
         };
 
-        let (body, _) = worker.render_markdown(&raw_body);
         Ok(format!(
             "<div class=\"admonition admonition-{}\"><span class=\"admonition-title admonition-title-{}\">{}</span>{}</div>\n",
             self.class,
             self.class,
             title,
-            body
+            &raw_body
         ))
     }
 }
@@ -110,32 +129,8 @@ pub struct Concat;
 
 impl DirectiveHandler for Concat {
     fn handle(&self, worker: &mut Worker, args: &[Node]) -> Result<String, ()> {
-        Ok(
-            args.iter()
-                .map(|node| worker.evaluate(node))
-                .fold(String::new(), |r, c| r + &c),
-        )
-    }
-}
-
-pub struct Markdown;
-
-impl DirectiveHandler for Markdown {
-    fn handle(&self, worker: &mut Worker, args: &[Node]) -> Result<String, ()> {
-        let body = args.iter()
-            .map(|node| worker.evaluate(node))
-            .fold(String::new(), |r, c| r + &c);
-
-        let (rendered, title) = worker.render_markdown(&body);
-
-        if !title.is_empty() && !worker.theme_config.contains_key("title") {
-            worker
-                .theme_config
-                .insert("title".to_owned(), serde_json::Value::String(title));
-        }
-
-        let rendered = rendered.trim().to_owned();
-        Ok(rendered)
+        let mut iter = args.iter();
+        Ok(concat_nodes(&mut iter, worker))
     }
 }
 
@@ -234,8 +229,7 @@ impl DirectiveHandler for DefinitionList {
 
                     let term = worker.evaluate(&children[0]);
                     let body = worker.evaluate(&children[1]);
-                    let (definition, _) = worker.render_markdown(&body);
-                    Ok(format!("<dt>{}</dt><dd>{}</dd>", term, definition))
+                    Ok(format!("<dt>{}</dt><dd>{}</dd>", term, &body))
                 }
             })
             .collect();
@@ -440,22 +434,28 @@ impl DirectiveHandler for TocTree {
     }
 }
 
+fn title_to_id(title: &str) -> String {
+    let mut result = String::with_capacity(title.len());
+
+    for c in title.chars() {
+        if c.is_alphanumeric() {
+            result.extend(c.to_lowercase());
+        } else if c == '-' || c == '_' {
+            result.push(c);
+        } else {
+            result.push_str(&(c as u32).to_string());
+        }
+    }
+
+    result
+}
+
 pub struct Heading {
-    level: &'static str,
+    level: u8,
 }
 
 impl Heading {
     pub fn new(level: u8) -> Self {
-        let level = match level {
-            1 => "#",
-            2 => "##",
-            3 => "###",
-            4 => "####",
-            5 => "#####",
-            6 => "######",
-            _ => panic!("Unknown heading level"),
-        };
-
         Heading { level }
     }
 }
@@ -466,14 +466,32 @@ impl DirectiveHandler for Heading {
         let arg1 = consume_string(&mut iter, worker).ok_or(())?;
         let arg2 = consume_string(&mut iter, worker);
 
-        match arg2 {
+        let (title, refdef) = match arg2 {
             Some(title) => {
                 let refdef = RefDef::new(&title, worker.get_slug());
-                worker.insert_refdef(arg1, refdef);
-                Ok(format!("\n{} {}\n", self.level, title))
+                worker.insert_refdef(arg1.to_owned(), refdef);
+                (title, arg1)
             }
-            None => Ok(format!("\n{} {}\n", self.level, arg1)),
+            None => {
+                let title_id = title_to_id(&arg1);
+                (arg1, title_id)
+            }
+        };
+
+        if !worker.theme_config.contains_key("title") {
+            worker.theme_config.insert(
+                "title".to_owned(),
+                serde_json::Value::String(title.to_owned()),
+            );
         }
+
+        Ok(format!(
+            r#"<h{} id="{}">{}</h{}>"#,
+            self.level,
+            refdef,
+            title,
+            self.level
+        ))
     }
 }
 
@@ -514,7 +532,6 @@ pub struct Steps;
 
 impl DirectiveHandler for Steps {
     fn handle(&self, worker: &mut Worker, args: &[Node]) -> Result<String, ()> {
-        let md = Markdown;
         let mut result: Vec<Cow<str>> = Vec::with_capacity(2 + (args.len() * 4));
         result.push(Cow::from(r#"<div class="steps">"#));
 
@@ -544,15 +561,6 @@ impl DirectiveHandler for Steps {
                 }
                 NodeValue::Children(ref children) => parse_args(children, worker),
             }?;
-
-            let title = md.handle(
-                worker,
-                &[Node::new_string(title, step_node.file_id, step_node.lineno)],
-            )?;
-            let body = md.handle(
-                worker,
-                &[Node::new_string(body, step_node.file_id, step_node.lineno)],
-            )?;
 
             result.push(Cow::from(
                 r#"<div class="steps__step"><div class="steps__bullet"><div class="steps__stepnumber">"#,
@@ -702,19 +710,6 @@ mod tests {
                 ]
             ),
             Ok("3.4-test".to_owned())
-        );
-    }
-
-    #[test]
-    fn test_markdown() {
-        let mut evaluator = Evaluator::new();
-        let mut worker = Worker::new(&mut evaluator);
-        let handler = Markdown;
-
-        assert_eq!(handler.handle(&mut worker, &[]), Ok("".to_owned()));
-        assert_eq!(
-            handler.handle(&mut worker, &[node_string("Some *markdown* text")]),
-            Ok("<p>Some <em>markdown</em> text</p>".to_owned())
         );
     }
 
@@ -872,7 +867,7 @@ mod tests {
                     &mut worker,
                     &[node_string("a-title"), node_string("A Title")]
                 ),
-                Ok("\n## A Title\n".to_owned())
+                Ok(r#"<h2 id="a-title">A Title</h2>"#.to_owned())
             );
         }
 

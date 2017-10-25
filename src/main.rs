@@ -1,5 +1,4 @@
 extern crate bytecount;
-extern crate comrak;
 extern crate glob;
 extern crate handlebars;
 #[macro_use]
@@ -27,7 +26,6 @@ mod evaluator;
 mod highlighter;
 mod init;
 mod lex;
-mod markdown;
 mod page;
 mod parse;
 mod theme;
@@ -295,7 +293,7 @@ fn build(verbose: bool) {
     config.verbose = verbose;
 
     let mut evaluator = Evaluator::new();
-    evaluator.register_prelude("md", Box::new(directives::Markdown));
+    evaluator.register_prelude("code", Box::new(directives::Code));
     evaluator.register_prelude("table", Box::new(directives::Dummy));
     evaluator.register_prelude("version", Box::new(directives::Version::new("3.4.0")));
     evaluator.register_prelude(
@@ -414,7 +412,7 @@ fn main() {
                 _ => help(1),
             },
             ArgMode::New => {
-                let alphanumeric = arg.chars().all(|c| c.is_alphabetic() || c.is_numeric());
+                let alphanumeric = arg.chars().all(|c| c.is_alphanumeric());
                 match arg.as_ref() {
                     "-h" | "--help" => help_new(0),
                     "-v" | "--verbose" => verbose = true,

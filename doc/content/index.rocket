@@ -2,11 +2,30 @@
 
 (:h1 home Home)
 
-Rocket is a fast, powerful, and homoiconic text (:wikipedia markup
-Markup_language) format with tight integration with
-[Markdown](https://daringfireball.net/projects/markdown/).
+Rocket is a fast, powerful, and homoiconic text markup format.
 
 Example ref: (:ref writing-your-first-project).
+
+(:h2 "Level 2 Title")
+
+(:h2 "Same Level")
+
+(:h3 "Level 3 Title")
+
+(:h2 "Back Up to Level 2")
+
+(:steps
+    (:step "First Step" "Do stuff")
+    (:step "Second Step" "Do other stuff")
+    (:step "Third Step" =>
+        Lorem ipsum
+
+        Sed facilisis
+)
+
+(:code sh =>
+    sudo apt-get install foobar
+    clear
 
 (:toctree
   "reference"
