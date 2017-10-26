@@ -7,8 +7,10 @@ extern crate lazy_static;
 extern crate lazycell;
 #[macro_use]
 extern crate log;
+extern crate num_cpus;
 extern crate rand;
 extern crate regex;
+extern crate scoped_threadpool;
 #[macro_use]
 extern crate serde_derive;
 #[macro_use]
@@ -36,12 +38,13 @@ use std::convert::From;
 use std::{env, mem, process};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use std::path::{Path, PathBuf};
 use evaluator::{Evaluator, Worker};
 use page::{Page, Slug};
 use toctree::TocTree;
 use directives::logic;
+use scoped_threadpool::Pool;
 
 #[derive(Debug)]
 enum LinkError {
@@ -74,7 +77,7 @@ struct RawConfig {
 
 struct Project {
     verbose: bool,
-    theme: theme::Theme,
+    theme: PathBuf,
     content_dir: PathBuf,
     output: PathBuf,
     templates: Vec<(glob::Pattern, String)>,
@@ -91,8 +94,7 @@ impl Project {
         file.read_to_string(&mut data).or(Err(()))?;
         let config: RawConfig = toml::from_str(&data).or(Err(()))?;
 
-        let theme_path = config.theme.ok_or(())?;
-        let theme = theme::Theme::load(&theme_path)?;
+        let theme = config.theme.ok_or(())?;
 
         let path_patterns: Result<Vec<_>, ()> = config
             .templates
@@ -155,7 +157,7 @@ impl Project {
         &self,
         evaluator: &Evaluator,
         page: &Page,
-        renderer: &mut theme::Renderer,
+        renderer: &theme::Renderer,
     ) -> Result<(), LinkError> {
         debug!("Linking {}", &page.slug);
 
@@ -183,55 +185,72 @@ impl Project {
 
         Ok(())
     }
+}
 
-    fn build_project(&self, evaluator: &mut Evaluator) {
-        let mut pending_pages = vec![];
-        let mut titles = HashMap::new();
+fn build_project(project: Project, mut evaluator: Evaluator) {
+    let mut pending_pages = vec![];
+    let mut titles = HashMap::new();
 
-        {
-            let mut worker = Worker::new(evaluator);
-            for entry in walkdir::WalkDir::new(&self.content_dir) {
-                let entry = entry.expect("Failed to walk dir");
-                if !entry.file_type().is_file() {
-                    continue;
+    {
+        let mut worker = Worker::new_with_options(&evaluator, &project.syntax_theme);
+        for entry in walkdir::WalkDir::new(&project.content_dir) {
+            let entry = entry.expect("Failed to walk dir");
+            if !entry.file_type().is_file() {
+                continue;
+            }
+
+            if entry.path().extension() != Some("rocket".as_ref()) {
+                continue;
+            }
+
+            let path = entry.path();
+            let slug = path.strip_prefix(&project.content_dir)
+                .expect("Failed to get output path");
+            let dir = slug.parent().unwrap();
+            let stem = slug.file_stem().unwrap();
+            let slug = Slug::new(dir.join(stem).to_string_lossy().as_ref().to_owned());
+            worker.set_slug(slug);
+
+            match project.build_file(&mut worker, path) {
+                Ok(page) => {
+                    titles.insert(page.slug.to_owned(), page.title());
+                    pending_pages.push(page);
                 }
-
-                if entry.path().extension() != Some("rocket".as_ref()) {
-                    continue;
-                }
-
-                let path = entry.path();
-                let slug = path.strip_prefix(&self.content_dir)
-                    .expect("Failed to get output path");
-                let dir = slug.parent().unwrap();
-                let stem = slug.file_stem().unwrap();
-                let slug = Slug::new(dir.join(stem).to_string_lossy().as_ref().to_owned());
-                worker.set_slug(slug);
-
-                match self.build_file(&mut worker, path) {
-                    Ok(page) => {
-                        titles.insert(page.slug.to_owned(), page.title());
-                        pending_pages.push(page);
-                    }
-                    Err(_) => {
-                        error!("Failed to build {}", path.to_string_lossy());
-                    }
+                Err(_) => {
+                    error!("Failed to build {}", path.to_string_lossy());
                 }
             }
         }
-
-        let mut toctree = mem::replace(&mut evaluator.toctree, RwLock::new(TocTree::new_empty()))
-            .into_inner()
-            .unwrap();
-        toctree.finish(titles);
-
-        let mut renderer =
-            theme::Renderer::new(&self.theme, toctree).expect("Failed to construct renderer");
-        for page in &pending_pages {
-            self.link_file(evaluator, page, &mut renderer)
-                .expect("Failed to link page");
-        }
     }
+
+    let mut toctree = mem::replace(&mut evaluator.toctree, RwLock::new(TocTree::new_empty()))
+        .into_inner()
+        .unwrap();
+    toctree.finish(titles);
+
+    let theme = theme::Theme::load(&project.theme).expect("Failed to load theme");
+
+    let project = Arc::new(project);
+    let evaluator = Arc::new(evaluator);
+    let renderer = Arc::new(
+        theme::Renderer::new(theme, Arc::new(toctree)).expect("Failed to construct renderer"),
+    );
+
+    let num_cpus = num_cpus::get() as u32;
+    debug!("Linking with {} workers", num_cpus);
+
+    let mut pool = Pool::new(num_cpus);
+    pool.scoped(move |scoped| for page in pending_pages.drain(0..) {
+        let project = Arc::clone(&project);
+        let evaluator = Arc::clone(&evaluator);
+        let renderer = Arc::clone(&renderer);
+
+        scoped.execute(move || {
+            project
+                .link_file(&evaluator, &page, &renderer)
+                .expect("Failed to link page");
+        });
+    });
 }
 
 fn build(verbose: bool) {
@@ -240,7 +259,7 @@ fn build(verbose: bool) {
 
     config.verbose = verbose;
 
-    let mut evaluator = Evaluator::new_with_options(&config.syntax_theme);
+    let mut evaluator = Evaluator::new();
     evaluator.register_prelude("md", Box::new(directives::Markdown));
     evaluator.register_prelude("table", Box::new(directives::Dummy));
     evaluator.register_prelude("version", Box::new(directives::Version::new("3.4.0")));
@@ -282,7 +301,7 @@ fn build(verbose: bool) {
     evaluator.register_prelude("!=", Box::new(logic::NotEquals));
 
     let start_time = time::precise_time_ns();
-    config.build_project(&mut evaluator);
+    build_project(config, evaluator);
 
     info!(
         "Took {} seconds",

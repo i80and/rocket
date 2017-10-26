@@ -16,7 +16,6 @@ lazy_static! {
 
 struct TocTreeHelper {
     toctree: Arc<TocTree>,
-    current_slug: Slug,
 }
 
 impl handlebars::HelperDef for TocTreeHelper {
@@ -27,8 +26,17 @@ impl handlebars::HelperDef for TocTreeHelper {
         rc: &mut handlebars::RenderContext,
     ) -> Result<(), handlebars::RenderError> {
         let slug = h.param(0).unwrap().value().as_str().unwrap();
+
+        let current_path = match rc.context().data().get("current_slug") {
+            Some(&serde_json::value::Value::String(ref s)) => Ok(s.to_owned()),
+            _ => Err(handlebars::RenderError::new(
+                "Unable to get current slug while rendering template",
+            )),
+        }?;
+        let current_slug = Slug::new(current_path);
+
         let html = self.toctree
-            .generate_html(&Slug::new(slug.to_owned()), &self.current_slug, true)
+            .generate_html(&Slug::new(slug.to_owned()), &current_slug, true)
             .or_else(|msg| Err(handlebars::RenderError::new(msg)))?
             .concat();
         rc.writer.write_all(html.as_bytes())?;
@@ -80,17 +88,16 @@ impl Theme {
     }
 }
 
-pub struct Renderer<'a> {
-    toctree: Arc<TocTree>,
+pub struct Renderer {
     handlebars: Handlebars,
-    constants: &'a serde_json::map::Map<String, serde_json::Value>,
+    constants: serde_json::map::Map<String, serde_json::Value>,
 }
 
-impl<'a> Renderer<'a> {
+impl Renderer {
     pub fn new(
-        theme: &'a Theme,
-        toctree: TocTree,
-    ) -> Result<Renderer<'a>, handlebars::TemplateFileError> {
+        theme: Theme,
+        toctree: Arc<TocTree>,
+    ) -> Result<Renderer, handlebars::TemplateFileError> {
         let mut handlebars = Handlebars::new();
         let theme_dir_path = theme.path.parent().unwrap_or_else(|| Path::new(""));
 
@@ -99,34 +106,33 @@ impl<'a> Renderer<'a> {
             handlebars.register_template_file(template_name, template_path)?;
         }
 
+        let helper = TocTreeHelper {
+            toctree: Arc::clone(&toctree),
+        };
+
         handlebars.register_helper("striptags", Box::new(StripTags));
+        handlebars.register_helper("toctree", Box::new(helper));
 
         Ok(Renderer {
-            toctree: Arc::new(toctree),
             handlebars,
-            constants: &theme.constants,
+            constants: theme.constants,
         })
     }
 
     pub fn render(
-        &mut self,
+        &self,
         template_name: &str,
         project_args: &serde_json::map::Map<String, serde_json::Value>,
         page: &Page,
         body: &str,
     ) -> Result<String, handlebars::RenderError> {
         let ctx = json!({
+            "current_slug": serde_json::value::Value::String(page.slug.as_ref().to_owned()),
             "page": &page.theme_config,
             "project": project_args,
             "theme": self.constants,
             "body": body,
         });
-
-        let helper = TocTreeHelper {
-            toctree: Arc::clone(&self.toctree),
-            current_slug: page.slug.to_owned(),
-        };
-        self.handlebars.register_helper("toctree", Box::new(helper));
 
         self.handlebars.render(template_name, &ctx)
     }

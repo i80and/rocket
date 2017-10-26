@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
+use std::sync::Arc;
 use std::{cmp, iter, mem, slice, str};
 use regex::{Captures, Regex};
 use serde_json;
@@ -24,6 +24,7 @@ fn consume_string(iter: &mut slice::Iter<Node>, worker: &mut Worker) -> Option<S
 fn escape_string(s: &str) -> String {
     s.chars().flat_map(|c| c.escape_default()).collect()
 }
+
 
 pub trait DirectiveHandler {
     fn handle(&self, worker: &mut Worker, args: &[Node]) -> Result<String, ()>;
@@ -310,7 +311,7 @@ impl DirectiveHandler for Let {
 
                 for pair in children.chunks(2) {
                     let evaluated_key = worker.evaluate(&pair[0]);
-                    let evaluated_value = Rc::new(StoredValue::Node(Node::new_string(
+                    let evaluated_value = Arc::new(StoredValue::Node(Node::new_string(
                         worker.evaluate(&pair[1]),
                         pair[1].file_id,
                         pair[1].lineno,
@@ -387,7 +388,7 @@ impl DirectiveHandler for Define {
 
         worker
             .ctx
-            .insert(key.to_owned(), Rc::new(StoredValue::Node(value)));
+            .insert(key.to_owned(), Arc::new(StoredValue::Node(value)));
         Ok("".to_owned())
     }
 }
@@ -529,7 +530,7 @@ impl DirectiveHandler for Steps {
             let (title, body) = match step_node.value {
                 NodeValue::Owned(ref s) => {
                     let stored_value = match worker.ctx.get(s) {
-                        Some(v) => Rc::clone(v),
+                        Some(v) => Arc::clone(v),
                         None => return Err(()),
                     };
 

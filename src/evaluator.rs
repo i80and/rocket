@@ -1,8 +1,8 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::marker::Sync;
 use std::path::Path;
-use std::rc::Rc;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use log;
 use serde_json;
 use rand;
@@ -36,15 +36,12 @@ impl RefDef {
 }
 
 pub enum StoredValue {
-    Directive(Box<directives::DirectiveHandler>),
+    Directive(Box<directives::DirectiveHandler + Sync + Send>),
     Node(Node),
 }
 
 pub struct Evaluator {
-    pub markdown: markdown::MarkdownRenderer,
-    pub highlighter: SyntaxHighlighter,
-
-    prelude_ctx: HashMap<String, Rc<StoredValue>>,
+    prelude_ctx: HashMap<String, Arc<StoredValue>>,
     pub refdefs: RwLock<HashMap<String, RefDef>>,
     pub toctree: RwLock<TocTree>,
 
@@ -54,12 +51,7 @@ pub struct Evaluator {
 }
 
 impl Evaluator {
-    #[allow(dead_code)]
     pub fn new() -> Self {
-        Self::new_with_options(highlighter::DEFAULT_SYNTAX_THEME)
-    }
-
-    pub fn new_with_options(syntax_theme: &str) -> Self {
         let hex_chars = b"0123456789abcdef";
         let mut rnd_buf = [0u8; 16];
         rand::thread_rng().fill_bytes(&mut rnd_buf);
@@ -74,8 +66,6 @@ impl Evaluator {
             Regex::new(&pattern_text).expect("Failed to compile linker pattern");
 
         Evaluator {
-            markdown: markdown::MarkdownRenderer::new(),
-            highlighter: SyntaxHighlighter::new(syntax_theme),
             prelude_ctx: HashMap::new(),
             refdefs: RwLock::new(HashMap::new()),
             toctree: RwLock::new(TocTree::new(Slug::new("index".to_owned()), true)),
@@ -89,10 +79,10 @@ impl Evaluator {
     pub fn register_prelude<S: Into<String>>(
         &mut self,
         name: S,
-        handler: Box<directives::DirectiveHandler>,
+        handler: Box<directives::DirectiveHandler + Sync + Send>,
     ) {
         self.prelude_ctx
-            .insert(name.into(), Rc::new(StoredValue::Directive(handler)));
+            .insert(name.into(), Arc::new(StoredValue::Directive(handler)));
     }
 
     pub fn substitute(&self, page: &Page) -> Result<String, ()> {
@@ -121,17 +111,28 @@ impl Evaluator {
 }
 
 pub struct Worker<'a> {
+    pub markdown: markdown::MarkdownRenderer,
+    pub highlighter: SyntaxHighlighter,
+
     current_slug: Option<Slug>,
     pub parser: Parser,
 
     evaluator: &'a Evaluator,
-    pub ctx: HashMap<String, Rc<StoredValue>>,
+    pub ctx: HashMap<String, Arc<StoredValue>>,
     pub theme_config: serde_json::map::Map<String, serde_json::Value>,
 }
 
 impl<'a> Worker<'a> {
+    #[allow(dead_code)]
     pub fn new(evaluator: &'a Evaluator) -> Self {
+        Self::new_with_options(evaluator, highlighter::DEFAULT_SYNTAX_THEME)
+    }
+
+    pub fn new_with_options(evaluator: &'a Evaluator, syntax_theme: &str) -> Self {
         Worker {
+            markdown: markdown::MarkdownRenderer::new(),
+            highlighter: SyntaxHighlighter::new(syntax_theme),
+
             current_slug: None,
             parser: Parser::new(),
             evaluator: evaluator,
@@ -141,9 +142,7 @@ impl<'a> Worker<'a> {
     }
 
     pub fn render_markdown(&self, md: &str) -> (String, String) {
-        self.evaluator
-            .markdown
-            .render(md, &self.evaluator.highlighter)
+        self.markdown.render(md, &self.highlighter)
     }
 
     pub fn evaluate(&mut self, node: &Node) -> String {
@@ -173,7 +172,7 @@ impl<'a> Worker<'a> {
             .get(key)
             .or_else(|| self.evaluator.prelude_ctx.get(key))
         {
-            Some(val) => Rc::clone(val),
+            Some(val) => Arc::clone(val),
             None => {
                 self.error(node, &format!("Unknown name: '{}'", key));
                 return Err(());
@@ -209,10 +208,10 @@ impl<'a> Worker<'a> {
     pub fn register<S: Into<String>>(
         &mut self,
         name: S,
-        handler: Box<directives::DirectiveHandler>,
+        handler: Box<directives::DirectiveHandler + Sync + Send>,
     ) {
         self.ctx
-            .insert(name.into(), Rc::new(StoredValue::Directive(handler)));
+            .insert(name.into(), Arc::new(StoredValue::Directive(handler)));
     }
 
     pub fn get_placeholder(&mut self, refid: String, action: PlaceholderAction) -> String {
