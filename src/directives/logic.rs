@@ -5,9 +5,9 @@ use directives::{consume_string, DirectiveHandler};
 pub struct If;
 
 impl DirectiveHandler for If {
-    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, worker: &mut Worker, args: &[Node]) -> Result<String, ()> {
         let mut iter = args.iter();
-        let condition = consume_string(&mut iter, evaluator).ok_or(())?;
+        let condition = consume_string(&mut iter, worker).ok_or(())?;
         let if_true = iter.next().ok_or(())?;
         let if_false = iter.next();
 
@@ -17,11 +17,11 @@ impl DirectiveHandler for If {
 
         if condition.is_empty() {
             match if_false {
-                Some(expr) => Ok(evaluator.evaluate(expr)),
+                Some(expr) => Ok(worker.evaluate(expr)),
                 None => Ok("".to_owned()),
             }
         } else {
-            Ok(evaluator.evaluate(if_true))
+            Ok(worker.evaluate(if_true))
         }
     }
 }
@@ -29,13 +29,13 @@ impl DirectiveHandler for If {
 pub struct Not;
 
 impl DirectiveHandler for Not {
-    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, worker: &mut Worker, args: &[Node]) -> Result<String, ()> {
         if args.len() != 1 {
             return Err(());
         }
 
         let mut iter = args.iter();
-        let value = consume_string(&mut iter, evaluator).ok_or(())?;
+        let value = consume_string(&mut iter, worker).ok_or(())?;
 
         if value.is_empty() {
             Ok("true".to_owned())
@@ -48,15 +48,15 @@ impl DirectiveHandler for Not {
 pub struct Equals;
 
 impl DirectiveHandler for Equals {
-    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, worker: &mut Worker, args: &[Node]) -> Result<String, ()> {
         if args.len() < 2 {
             return Err(());
         }
 
         let mut iter = args.iter();
-        let initial = consume_string(&mut iter, evaluator).ok_or(())?;
+        let initial = consume_string(&mut iter, worker).ok_or(())?;
 
-        let is_true = iter.all(|node| initial == evaluator.evaluate(node));
+        let is_true = iter.all(|node| initial == worker.evaluate(node));
 
         if is_true {
             Ok("true".to_owned())
@@ -69,9 +69,9 @@ impl DirectiveHandler for Equals {
 pub struct NotEquals;
 
 impl DirectiveHandler for NotEquals {
-    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, worker: &mut Worker, args: &[Node]) -> Result<String, ()> {
         let equals = Equals;
-        let result = equals.handle(evaluator, args)?;
+        let result = equals.handle(worker, args)?;
 
         if result.is_empty() {
             Ok("true".to_owned())
