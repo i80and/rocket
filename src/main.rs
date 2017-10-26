@@ -36,8 +36,9 @@ use std::convert::From;
 use std::{env, mem, process};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
+use std::sync::RwLock;
 use std::path::{Path, PathBuf};
-use evaluator::Evaluator;
+use evaluator::{Evaluator, Worker};
 use page::{Page, Slug};
 use toctree::TocTree;
 use directives::logic;
@@ -127,10 +128,10 @@ impl Project {
         })
     }
 
-    fn build_file(&self, evaluator: &mut Evaluator, path: &Path) -> Result<Page, ()> {
-        debug!("Compiling {}", evaluator.get_slug());
+    fn build_file(&self, worker: &mut Worker, path: &Path) -> Result<Page, ()> {
+        debug!("Compiling {}", worker.get_slug());
 
-        let node = match evaluator.parser.parse(path) {
+        let node = match worker.parser.parse(path) {
             Ok(n) => n,
             Err(msg) => {
                 error!("Failed to parse '{}': {}", path.to_string_lossy(), msg);
@@ -138,16 +139,15 @@ impl Project {
             }
         };
 
-        let output = evaluator.evaluate(&node);
+        let output = worker.evaluate(&node);
 
         let page = Page {
             source_path: path.to_owned(),
-            slug: evaluator.get_slug().clone(),
+            slug: worker.get_slug().clone(),
             body: output,
-            theme_config: evaluator.theme_config.clone(),
+            theme_config: worker.theme_config.clone(),
         };
 
-        evaluator.reset();
         Ok(page)
     }
 
@@ -188,36 +188,41 @@ impl Project {
         let mut pending_pages = vec![];
         let mut titles = HashMap::new();
 
-        for entry in walkdir::WalkDir::new(&self.content_dir) {
-            let entry = entry.expect("Failed to walk dir");
-            if !entry.file_type().is_file() {
-                continue;
-            }
-
-            if entry.path().extension() != Some("rocket".as_ref()) {
-                continue;
-            }
-
-            let path = entry.path();
-            let slug = path.strip_prefix(&self.content_dir)
-                .expect("Failed to get output path");
-            let dir = slug.parent().unwrap();
-            let stem = slug.file_stem().unwrap();
-            let slug = Slug::new(dir.join(stem).to_string_lossy().as_ref().to_owned());
-            evaluator.set_slug(slug);
-
-            match self.build_file(evaluator, path) {
-                Ok(page) => {
-                    titles.insert(page.slug.to_owned(), page.title());
-                    pending_pages.push(page);
+        {
+            let mut worker = Worker::new(evaluator);
+            for entry in walkdir::WalkDir::new(&self.content_dir) {
+                let entry = entry.expect("Failed to walk dir");
+                if !entry.file_type().is_file() {
+                    continue;
                 }
-                Err(_) => {
-                    error!("Failed to build {}", path.to_string_lossy());
+
+                if entry.path().extension() != Some("rocket".as_ref()) {
+                    continue;
+                }
+
+                let path = entry.path();
+                let slug = path.strip_prefix(&self.content_dir)
+                    .expect("Failed to get output path");
+                let dir = slug.parent().unwrap();
+                let stem = slug.file_stem().unwrap();
+                let slug = Slug::new(dir.join(stem).to_string_lossy().as_ref().to_owned());
+                worker.set_slug(slug);
+
+                match self.build_file(&mut worker, path) {
+                    Ok(page) => {
+                        titles.insert(page.slug.to_owned(), page.title());
+                        pending_pages.push(page);
+                    }
+                    Err(_) => {
+                        error!("Failed to build {}", path.to_string_lossy());
+                    }
                 }
             }
         }
 
-        let mut toctree = mem::replace(&mut evaluator.toctree, TocTree::new_empty());
+        let mut toctree = mem::replace(&mut evaluator.toctree, RwLock::new(TocTree::new_empty()))
+            .into_inner()
+            .unwrap();
         toctree.finish(titles);
 
         let mut renderer =

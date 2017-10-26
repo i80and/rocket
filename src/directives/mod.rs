@@ -7,11 +7,11 @@ use regex::{Captures, Regex};
 use serde_json;
 use parse::{Node, NodeValue};
 use page::Slug;
-use evaluator::{Evaluator, PlaceholderAction, RefDef, StoredValue};
+use evaluator::{PlaceholderAction, RefDef, StoredValue, Worker};
 
 pub mod logic;
 
-fn consume_string(iter: &mut slice::Iter<Node>, evaluator: &mut Evaluator) -> Option<String> {
+fn consume_string(iter: &mut slice::Iter<Node>, evaluator: &mut Worker) -> Option<String> {
     match iter.next() {
         Some(n) => match n.value {
             NodeValue::Owned(ref s) => Some(s.to_owned()),
@@ -26,14 +26,14 @@ fn escape_string(s: &str) -> String {
 }
 
 pub trait DirectiveHandler {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()>;
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()>;
 }
 
 pub struct Dummy;
 
 impl DirectiveHandler for Dummy {
     #[allow(unused_variables)]
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
         Ok("".to_owned())
     }
 }
@@ -51,7 +51,7 @@ impl Version {
 }
 
 impl DirectiveHandler for Version {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
         match args.len() {
             0 => Ok(self.version.join(".")),
             1 => {
@@ -83,7 +83,7 @@ impl Admonition {
 }
 
 impl DirectiveHandler for Admonition {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
         let mut title = self.title.to_owned();
         let raw_body = match args.len() {
             1 => evaluator.evaluate(&args[0]),
@@ -94,7 +94,7 @@ impl DirectiveHandler for Admonition {
             _ => return Err(()),
         };
 
-        let (body, _) = evaluator.markdown.render(&raw_body, &evaluator.highlighter);
+        let (body, _) = evaluator.render_markdown(&raw_body);
         Ok(format!(
             "<div class=\"admonition admonition-{}\"><span class=\"admonition-title admonition-title-{}\">{}</span>{}</div>\n",
             self.class,
@@ -108,7 +108,7 @@ impl DirectiveHandler for Admonition {
 pub struct Concat;
 
 impl DirectiveHandler for Concat {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
         Ok(
             args.iter()
                 .map(|node| evaluator.evaluate(node))
@@ -120,12 +120,12 @@ impl DirectiveHandler for Concat {
 pub struct Markdown;
 
 impl DirectiveHandler for Markdown {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
         let body = args.iter()
             .map(|node| evaluator.evaluate(node))
             .fold(String::new(), |r, c| r + &c);
 
-        let (rendered, title) = evaluator.markdown.render(&body, &evaluator.highlighter);
+        let (rendered, title) = evaluator.render_markdown(&body);
 
         if !title.is_empty() && !evaluator.theme_config.contains_key("title") {
             evaluator
@@ -150,7 +150,7 @@ impl Template {
 }
 
 impl DirectiveHandler for Template {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
         let checkers = self.checkers.iter().map(Some).chain(iter::repeat(None));
 
         let args: Result<Vec<String>, ()> = args.iter()
@@ -195,7 +195,7 @@ impl DirectiveHandler for Template {
 pub struct DefineTemplate;
 
 impl DirectiveHandler for DefineTemplate {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
         let mut iter = args.iter();
         let name = consume_string(&mut iter, evaluator).ok_or(())?;
         let template_text = consume_string(&mut iter, evaluator).ok_or(())?;
@@ -222,7 +222,7 @@ impl DirectiveHandler for DefineTemplate {
 pub struct DefinitionList;
 
 impl DirectiveHandler for DefinitionList {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
         let segments: Result<Vec<_>, _> = args.iter()
             .map(|node| match node.value {
                 NodeValue::Owned(_) => Err(()),
@@ -233,7 +233,7 @@ impl DirectiveHandler for DefinitionList {
 
                     let term = evaluator.evaluate(&children[0]);
                     let body = evaluator.evaluate(&children[1]);
-                    let (definition, _) = evaluator.markdown.render(&body, &evaluator.highlighter);
+                    let (definition, _) = evaluator.render_markdown(&body);
                     Ok(format!("<dt>{}</dt><dd>{}</dd>", term, definition))
                 }
             })
@@ -249,7 +249,7 @@ impl DirectiveHandler for DefinitionList {
 pub struct Include;
 
 impl DirectiveHandler for Include {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
         if args.len() != 1 {
             return Err(());
         }
@@ -281,7 +281,7 @@ impl DirectiveHandler for Include {
 pub struct Import;
 
 impl DirectiveHandler for Import {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
         let include = Include;
         include.handle(evaluator, args)?;
 
@@ -292,7 +292,7 @@ impl DirectiveHandler for Import {
 pub struct Let;
 
 impl DirectiveHandler for Let {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
         if args.len() < 1 {
             return Err(());
         }
@@ -349,7 +349,7 @@ impl DirectiveHandler for Let {
 pub struct Define;
 
 impl DirectiveHandler for Define {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
         let mut iter = args.iter();
         let arg1 = consume_string(&mut iter, evaluator).ok_or(())?;
         let arg2 = iter.next().ok_or(())?;
@@ -395,7 +395,7 @@ impl DirectiveHandler for Define {
 pub struct ThemeConfig;
 
 impl DirectiveHandler for ThemeConfig {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
         if args.len() % 2 != 0 {
             return Err(());
         }
@@ -416,15 +416,11 @@ impl DirectiveHandler for ThemeConfig {
 pub struct TocTree;
 
 impl DirectiveHandler for TocTree {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
-        let current_slug = evaluator.get_slug().to_owned();
-
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
         for arg in args {
             match arg.value {
                 NodeValue::Owned(ref slug) => {
-                    evaluator
-                        .toctree
-                        .add(&current_slug, Slug::new(slug.to_owned()), None);
+                    evaluator.add_to_toctree(Slug::new(slug.to_owned()), None);
                 }
                 NodeValue::Children(ref children) => {
                     if children.len() != 2 {
@@ -434,9 +430,7 @@ impl DirectiveHandler for TocTree {
                     let title = evaluator.evaluate(&children[0]);
                     let slug = evaluator.evaluate(&children[1]);
 
-                    evaluator
-                        .toctree
-                        .add(&current_slug, Slug::new(slug), Some(title));
+                    evaluator.add_to_toctree(Slug::new(slug), Some(title));
                 }
             }
         }
@@ -466,7 +460,7 @@ impl Heading {
 }
 
 impl DirectiveHandler for Heading {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
         let mut iter = args.iter();
         let arg1 = consume_string(&mut iter, evaluator).ok_or(())?;
         let arg2 = consume_string(&mut iter, evaluator);
@@ -474,7 +468,7 @@ impl DirectiveHandler for Heading {
         match arg2 {
             Some(title) => {
                 let refdef = RefDef::new(&title, evaluator.get_slug());
-                evaluator.refdefs.insert(arg1, refdef);
+                evaluator.insert_refdef(arg1, refdef);
                 Ok(format!("\n{} {}\n", self.level, title))
             }
             None => Ok(format!("\n{} {}\n", self.level, arg1)),
@@ -485,13 +479,13 @@ impl DirectiveHandler for Heading {
 pub struct RefDefDirective;
 
 impl DirectiveHandler for RefDefDirective {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
         let mut iter = args.iter();
         let id = consume_string(&mut iter, evaluator).ok_or(())?;
         let title = consume_string(&mut iter, evaluator).ok_or(())?;
 
         let refdef = RefDef::new(&title, evaluator.get_slug());
-        evaluator.refdefs.insert(id, refdef);
+        evaluator.insert_refdef(id, refdef);
 
         Ok(String::new())
     }
@@ -500,7 +494,7 @@ impl DirectiveHandler for RefDefDirective {
 pub struct RefDirective;
 
 impl DirectiveHandler for RefDirective {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
         let mut iter = args.iter();
         let refid = consume_string(&mut iter, evaluator).ok_or(())?;
 
@@ -518,13 +512,13 @@ impl DirectiveHandler for RefDirective {
 pub struct Steps;
 
 impl DirectiveHandler for Steps {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
         let md = Markdown;
         let mut result: Vec<Cow<str>> = Vec::with_capacity(2 + (args.len() * 4));
         result.push(Cow::from(r#"<div class="steps">"#));
 
         for (i, step_node) in args.iter().enumerate() {
-            let parse_args = |args: &[Node], evaluator: &mut Evaluator| {
+            let parse_args = |args: &[Node], evaluator: &mut Worker| {
                 if args.len() != 3 {
                     return Err(());
                 }
@@ -577,7 +571,7 @@ impl DirectiveHandler for Steps {
 pub struct Figure;
 
 impl DirectiveHandler for Figure {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
         let mut iter = args.iter();
         let src = escape_string(&consume_string(&mut iter, evaluator).ok_or(())?);
         let src = evaluator.add_asset(&src)?;
@@ -604,6 +598,7 @@ impl DirectiveHandler for Figure {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use evaluator::Evaluator;
 
     fn node_string(s: &str) -> Node {
         Node::new_string(s, 0, -1)
@@ -616,15 +611,17 @@ mod tests {
     #[test]
     fn test_dummy() {
         let mut evaluator = Evaluator::new();
+        let mut worker = Worker::new(&mut evaluator);
+
         let handler = Dummy;
 
-        assert_eq!(handler.handle(&mut evaluator, &[]), Ok("".to_owned()));
+        assert_eq!(handler.handle(&mut worker, &[]), Ok("".to_owned()));
         assert_eq!(
-            handler.handle(&mut evaluator, &[node_string("")]),
+            handler.handle(&mut worker, &[node_string("")]),
             Ok("".to_owned())
         );
         assert_eq!(
-            handler.handle(&mut evaluator, &[node_children(vec![node_string("")])]),
+            handler.handle(&mut worker, &[node_children(vec![node_string("")])]),
             Ok("".to_owned())
         );
     }
@@ -632,26 +629,27 @@ mod tests {
     #[test]
     fn test_version() {
         let mut evaluator = Evaluator::new();
-        evaluator.register("concat", Box::new(Concat));
+        let mut worker = Worker::new(&mut evaluator);
+        worker.register("concat", Box::new(Concat));
         let handler = Version::new("3.4.0");
 
-        assert_eq!(handler.handle(&mut evaluator, &[]), Ok("3.4.0".to_owned()));
+        assert_eq!(handler.handle(&mut worker, &[]), Ok("3.4.0".to_owned()));
         assert_eq!(
-            handler.handle(&mut evaluator, &[node_string("")]),
+            handler.handle(&mut worker, &[node_string("")]),
             Ok("".to_owned())
         );
         assert_eq!(
-            handler.handle(&mut evaluator, &[node_string("x")]),
+            handler.handle(&mut worker, &[node_string("x")]),
             Ok("3".to_owned())
         );
         assert_eq!(
-            handler.handle(&mut evaluator, &[node_string("x.y")]),
+            handler.handle(&mut worker, &[node_string("x.y")]),
             Ok("3.4".to_owned())
         );
 
         assert_eq!(
             handler.handle(
-                &mut evaluator,
+                &mut worker,
                 &[
                     node_children(vec![
                         node_string("concat"),
@@ -667,30 +665,28 @@ mod tests {
     #[test]
     fn test_admonition() {
         let mut evaluator = Evaluator::new();
+        let mut worker = Worker::new(&mut evaluator);
         let handler = Admonition::new("note", "Note");
 
-        assert!(handler.handle(&mut evaluator, &[]).is_err());
-        assert!(
-            handler
-                .handle(&mut evaluator, &[node_string("foo")])
-                .is_ok()
-        );
+        assert!(handler.handle(&mut worker, &[]).is_err());
+        assert!(handler.handle(&mut worker, &[node_string("foo")]).is_ok());
     }
 
     #[test]
     fn test_concat() {
         let mut evaluator = Evaluator::new();
-        evaluator.register("version", Box::new(Version::new("3.4")));
+        let mut worker = Worker::new(&mut evaluator);
+        worker.register("version", Box::new(Version::new("3.4")));
         let handler = Concat;
 
-        assert_eq!(handler.handle(&mut evaluator, &[]), Ok("".to_owned()));
+        assert_eq!(handler.handle(&mut worker, &[]), Ok("".to_owned()));
         assert_eq!(
-            handler.handle(&mut evaluator, &[node_string("foo")]),
+            handler.handle(&mut worker, &[node_string("foo")]),
             Ok("foo".to_owned())
         );
         assert_eq!(
             handler.handle(
-                &mut evaluator,
+                &mut worker,
                 &[node_string("foo"), node_string("bar"), node_string("baz")]
             ),
             Ok("foobarbaz".to_owned())
@@ -698,7 +694,7 @@ mod tests {
 
         assert_eq!(
             handler.handle(
-                &mut evaluator,
+                &mut worker,
                 &[
                     node_children(vec![node_string("version")]),
                     node_string("-test")
@@ -711,11 +707,12 @@ mod tests {
     #[test]
     fn test_markdown() {
         let mut evaluator = Evaluator::new();
+        let mut worker = Worker::new(&mut evaluator);
         let handler = Markdown;
 
-        assert_eq!(handler.handle(&mut evaluator, &[]), Ok("".to_owned()));
+        assert_eq!(handler.handle(&mut worker, &[]), Ok("".to_owned()));
         assert_eq!(
-            handler.handle(&mut evaluator, &[node_string("Some *markdown* text")]),
+            handler.handle(&mut worker, &[node_string("Some *markdown* text")]),
             Ok("<p>Some <em>markdown</em> text</p>".to_owned())
         );
     }
@@ -723,13 +720,14 @@ mod tests {
     #[test]
     fn test_template() {
         let mut evaluator = Evaluator::new();
+        let mut worker = Worker::new(&mut evaluator);
         let handler = Template::new(
             r#"[${0}](https://foxquill.com${1} "${2}")"#.to_owned(),
             vec![Regex::new("^.+$").unwrap(), Regex::new("^/.*$").unwrap()],
         );
 
-        assert!(handler.handle(&mut evaluator, &[]).is_err());
-        assert_eq!(handler.handle(&mut evaluator, &[
+        assert!(handler.handle(&mut worker, &[]).is_err());
+        assert_eq!(handler.handle(&mut worker, &[
             node_string("SIMD.js Rectangle Intersection"),
             node_string("/simd-rectangle-intersection/")]),
                    Ok(r#"[SIMD.js Rectangle Intersection](https://foxquill.com/simd-rectangle-intersection/ "")"#.to_owned()));
@@ -738,13 +736,14 @@ mod tests {
     #[test]
     fn test_let() {
         let mut evaluator = Evaluator::new();
+        let mut worker = Worker::new(&mut evaluator);
         let handler = Let;
 
-        evaluator.register("concat", Box::new(Concat));
+        worker.register("concat", Box::new(Concat));
 
-        assert!(handler.handle(&mut evaluator, &[]).is_err());
+        assert!(handler.handle(&mut worker, &[]).is_err());
         let result = handler.handle(
-            &mut evaluator,
+            &mut worker,
             &[
                 node_children(vec![
                     node_string("foo"),
@@ -767,18 +766,19 @@ mod tests {
     #[test]
     fn test_define() {
         let mut evaluator = Evaluator::new();
-        evaluator.register("concat", Box::new(Concat));
+        let mut worker = Worker::new(&mut evaluator);
+        worker.register("concat", Box::new(Concat));
         let handler = Define;
 
         assert_eq!(
-            handler.handle(&mut evaluator, &[node_string("foo"), node_string("foo")]),
+            handler.handle(&mut worker, &[node_string("foo"), node_string("foo")]),
             Ok("".to_owned())
         );
 
-        assert!(handler.handle(&mut evaluator, &[]).is_err());
+        assert!(handler.handle(&mut worker, &[]).is_err());
         assert_eq!(
             handler.handle(
-                &mut evaluator,
+                &mut worker,
                 &[
                     node_string("x"),
                     node_children(vec![
@@ -792,13 +792,13 @@ mod tests {
         );
 
         assert_eq!(
-            handler.handle(&mut evaluator, &[node_string("foo"), node_string("bar")]),
+            handler.handle(&mut worker, &[node_string("foo"), node_string("bar")]),
             Ok("".to_owned())
         );
 
         assert_eq!(
             handler.handle(
-                &mut evaluator,
+                &mut worker,
                 &[
                     node_string("evaluate"),
                     node_string("eager"),
@@ -809,37 +809,33 @@ mod tests {
         );
 
         assert_eq!(
-            evaluator.lookup(&node_string(""), "x", &vec![]).unwrap(),
+            worker.lookup(&node_string(""), "x", &vec![]).unwrap(),
             "barbar".to_owned()
         );
 
         assert_eq!(
-            evaluator
-                .lookup(&node_string(""), "eager", &vec![])
-                .unwrap(),
+            worker.lookup(&node_string(""), "eager", &vec![]).unwrap(),
             "barbar".to_owned()
         );
 
         assert_eq!(
-            evaluator.lookup(&node_string(""), "foo", &vec![]).unwrap(),
+            worker.lookup(&node_string(""), "foo", &vec![]).unwrap(),
             "bar".to_owned()
         );
 
         // Now change foo to make sure x changes but eager does not
         assert_eq!(
-            handler.handle(&mut evaluator, &[node_string("foo"), node_string("baz")]),
+            handler.handle(&mut worker, &[node_string("foo"), node_string("baz")]),
             Ok("".to_owned())
         );
 
         assert_eq!(
-            evaluator.lookup(&node_string(""), "x", &vec![]).unwrap(),
+            worker.lookup(&node_string(""), "x", &vec![]).unwrap(),
             "bazbar".to_owned()
         );
 
         assert_eq!(
-            evaluator
-                .lookup(&node_string(""), "eager", &vec![])
-                .unwrap(),
+            worker.lookup(&node_string(""), "eager", &vec![]).unwrap(),
             "barbar".to_owned()
         );
     }
@@ -847,15 +843,16 @@ mod tests {
     #[test]
     fn test_theme_config() {
         let mut evaluator = Evaluator::new();
+        let mut worker = Worker::new(&mut evaluator);
         let handler = ThemeConfig;
 
-        assert_eq!(handler.handle(&mut evaluator, &[]), Ok("".to_owned()));
+        assert_eq!(handler.handle(&mut worker, &[]), Ok("".to_owned()));
         assert_eq!(
-            handler.handle(&mut evaluator, &[node_string("foo"), node_string("bar")]),
+            handler.handle(&mut worker, &[node_string("foo"), node_string("bar")]),
             Ok("".to_owned())
         );
         assert_eq!(
-            evaluator.theme_config.get("foo"),
+            worker.theme_config.get("foo"),
             Some(&serde_json::Value::String("bar".to_owned()))
         );
     }
@@ -863,19 +860,29 @@ mod tests {
     #[test]
     fn test_heading() {
         let mut evaluator = Evaluator::new();
-        evaluator.set_slug(Slug::new("index".to_owned()));
-        let handler = Heading::new(2);
+        {
+            let mut worker = Worker::new(&mut evaluator);
+            worker.set_slug(Slug::new("index".to_owned()));
+            let handler = Heading::new(2);
 
-        assert!(handler.handle(&mut evaluator, &[]).is_err());
+            assert!(handler.handle(&mut worker, &[]).is_err());
+            assert_eq!(
+                handler.handle(
+                    &mut worker,
+                    &[node_string("a-title"), node_string("A Title")]
+                ),
+                Ok("\n## A Title\n".to_owned())
+            );
+        }
+
         assert_eq!(
-            handler.handle(
-                &mut evaluator,
-                &[node_string("a-title"), node_string("A Title")]
-            ),
-            Ok("\n## A Title\n".to_owned())
-        );
-        assert_eq!(
-            evaluator.refdefs.get("a-title").unwrap().title,
+            evaluator
+                .refdefs
+                .read()
+                .unwrap()
+                .get("a-title")
+                .unwrap()
+                .title,
             "A Title".to_owned()
         );
     }
@@ -883,24 +890,34 @@ mod tests {
     #[test]
     fn test_refdef() {
         let mut evaluator = Evaluator::new();
-        evaluator.set_slug(Slug::new("index".to_owned()));
-        let handler = RefDefDirective;
+        {
+            let mut worker = Worker::new(&mut evaluator);
+            worker.set_slug(Slug::new("index".to_owned()));
+            let handler = RefDefDirective;
 
-        assert!(handler.handle(&mut evaluator, &[]).is_err());
-        assert!(
-            handler
-                .handle(&mut evaluator, &[node_string("a-title")])
-                .is_err()
-        );
+            assert!(handler.handle(&mut worker, &[]).is_err());
+            assert!(
+                handler
+                    .handle(&mut worker, &[node_string("a-title")])
+                    .is_err()
+            );
+            assert_eq!(
+                handler.handle(
+                    &mut worker,
+                    &[node_string("a-title"), node_string("A Title")]
+                ),
+                Ok(String::new())
+            );
+        }
+
         assert_eq!(
-            handler.handle(
-                &mut evaluator,
-                &[node_string("a-title"), node_string("A Title")]
-            ),
-            Ok(String::new())
-        );
-        assert_eq!(
-            evaluator.refdefs.get("a-title").unwrap().title,
+            evaluator
+                .refdefs
+                .read()
+                .unwrap()
+                .get("a-title")
+                .unwrap()
+                .title,
             "A Title".to_owned()
         );
     }
@@ -908,25 +925,26 @@ mod tests {
     #[test]
     fn test_figure() {
         let mut evaluator = Evaluator::new();
-        evaluator.set_slug(Slug::new("index".to_owned()));
+        let mut worker = Worker::new(&mut evaluator);
+        worker.set_slug(Slug::new("index".to_owned()));
         let handler = Figure;
 
-        assert!(handler.handle(&mut evaluator, &[]).is_err());
+        assert!(handler.handle(&mut worker, &[]).is_err());
         assert!(
             handler
-                .handle(&mut evaluator, &[node_string("foo.png")])
+                .handle(&mut worker, &[node_string("foo.png")])
                 .is_err()
         );
         assert_eq!(
             handler.handle(
-                &mut evaluator,
+                &mut worker,
                 &[node_string("fo\"o.png"), node_string("al\"t")]
             ),
             Ok(r#"<img src="_static/fo\"o.png" alt="al\"t">"#.to_owned())
         );
         assert_eq!(
             handler.handle(
-                &mut evaluator,
+                &mut worker,
                 &[
                     node_string("fo\"o.png"),
                     node_string("al\"t"),
@@ -936,12 +954,9 @@ mod tests {
             Ok(r#"<img src="_static/fo\"o.png" alt="al\"t" width=320px>"#.to_owned())
         );
 
-        evaluator.set_slug(Slug::new("reference/directives".to_owned()));
+        worker.set_slug(Slug::new("reference/directives".to_owned()));
         assert_eq!(
-            handler.handle(
-                &mut evaluator,
-                &[node_string("foo.png"), node_string("foo")]
-            ),
+            handler.handle(&mut worker, &[node_string("foo.png"), node_string("foo")]),
             Ok(r#"<img src="../../_static/foo.png" alt="foo">"#.to_owned())
         );
     }

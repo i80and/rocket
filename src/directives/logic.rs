@@ -1,11 +1,11 @@
 use parse::Node;
-use evaluator::Evaluator;
+use evaluator::Worker;
 use directives::{consume_string, DirectiveHandler};
 
 pub struct If;
 
 impl DirectiveHandler for If {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
         let mut iter = args.iter();
         let condition = consume_string(&mut iter, evaluator).ok_or(())?;
         let if_true = iter.next().ok_or(())?;
@@ -29,7 +29,7 @@ impl DirectiveHandler for If {
 pub struct Not;
 
 impl DirectiveHandler for Not {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
         if args.len() != 1 {
             return Err(());
         }
@@ -48,7 +48,7 @@ impl DirectiveHandler for Not {
 pub struct Equals;
 
 impl DirectiveHandler for Equals {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
         if args.len() < 2 {
             return Err(());
         }
@@ -69,7 +69,7 @@ impl DirectiveHandler for Equals {
 pub struct NotEquals;
 
 impl DirectiveHandler for NotEquals {
-    fn handle(&self, evaluator: &mut Evaluator, args: &[Node]) -> Result<String, ()> {
+    fn handle(&self, evaluator: &mut Worker, args: &[Node]) -> Result<String, ()> {
         let equals = Equals;
         let result = equals.handle(evaluator, args)?;
 
@@ -85,6 +85,7 @@ impl DirectiveHandler for NotEquals {
 mod tests {
     use super::*;
     use directives::*;
+    use evaluator::Evaluator;
 
 
     fn node_string(s: &str) -> Node {
@@ -98,25 +99,22 @@ mod tests {
     #[test]
     fn test_if() {
         let mut evaluator = Evaluator::new();
-        evaluator.register("concat", Box::new(Concat));
+        evaluator.register_prelude("concat", Box::new(Concat));
+        let mut worker = Worker::new(&mut evaluator);
         let handler = If;
 
-        assert!(handler.handle(&mut evaluator, &[]).is_err());
-        assert!(
-            handler
-                .handle(&mut evaluator, &[node_string("true")])
-                .is_err()
-        );
+        assert!(handler.handle(&mut worker, &[]).is_err());
+        assert!(handler.handle(&mut worker, &[node_string("true")]).is_err());
         assert_eq!(
             handler.handle(
-                &mut evaluator,
+                &mut worker,
                 &[node_string(""), node_string("true"), node_string("false")]
             ),
             Ok("false".to_owned())
         );
         assert_eq!(
             handler.handle(
-                &mut evaluator,
+                &mut worker,
                 &[
                     node_children(vec![node_string("concat"), node_string("foobar")]),
                     node_string("true"),
@@ -127,7 +125,7 @@ mod tests {
         );
         assert_eq!(
             handler.handle(
-                &mut evaluator,
+                &mut worker,
                 &[
                     node_children(vec![node_string("concat"), node_string("")]),
                     node_string("true"),
@@ -141,26 +139,27 @@ mod tests {
     #[test]
     fn test_not() {
         let mut evaluator = Evaluator::new();
-        evaluator.register("concat", Box::new(Concat));
+        evaluator.register_prelude("concat", Box::new(Concat));
+        let mut worker = Worker::new(&mut evaluator);
         let handler = Not;
 
-        assert!(handler.handle(&mut evaluator, &[]).is_err());
+        assert!(handler.handle(&mut worker, &[]).is_err());
         assert!(
             handler
-                .handle(&mut evaluator, &[node_string("foo"), node_string("bar")])
+                .handle(&mut worker, &[node_string("foo"), node_string("bar")])
                 .is_err()
         );
         assert_eq!(
-            handler.handle(&mut evaluator, &[node_string("foo")]),
+            handler.handle(&mut worker, &[node_string("foo")]),
             Ok("".to_owned())
         );
         assert_eq!(
-            handler.handle(&mut evaluator, &[node_string("")]),
+            handler.handle(&mut worker, &[node_string("")]),
             Ok("true".to_owned())
         );
         assert_eq!(
             handler.handle(
-                &mut evaluator,
+                &mut worker,
                 &[
                     node_children(vec![node_string("concat"), node_string("foo")])
                 ]
@@ -169,7 +168,7 @@ mod tests {
         );
         assert_eq!(
             handler.handle(
-                &mut evaluator,
+                &mut worker,
                 &[node_children(vec![node_string("concat"), node_string("")])]
             ),
             Ok("true".to_owned())
@@ -179,22 +178,19 @@ mod tests {
     #[test]
     fn test_equals() {
         let mut evaluator = Evaluator::new();
-        evaluator.register("concat", Box::new(Concat));
+        evaluator.register_prelude("concat", Box::new(Concat));
+        let mut worker = Worker::new(&mut evaluator);
         let handler = Equals;
 
-        assert!(handler.handle(&mut evaluator, &[]).is_err());
-        assert!(
-            handler
-                .handle(&mut evaluator, &[node_string("foo")])
-                .is_err()
-        );
+        assert!(handler.handle(&mut worker, &[]).is_err());
+        assert!(handler.handle(&mut worker, &[node_string("foo")]).is_err());
         assert_eq!(
-            handler.handle(&mut evaluator, &[node_string("foo"), node_string("foo")]),
+            handler.handle(&mut worker, &[node_string("foo"), node_string("foo")]),
             Ok("true".to_owned())
         );
         assert_eq!(
             handler.handle(
-                &mut evaluator,
+                &mut worker,
                 &[
                     node_children(vec![node_string("concat"), node_string("foo")]),
                     node_string("foo")
@@ -204,7 +200,7 @@ mod tests {
         );
         assert_eq!(
             handler.handle(
-                &mut evaluator,
+                &mut worker,
                 &[
                     node_string("foo"),
                     node_children(vec![node_string("concat"), node_string("foo")])
@@ -213,7 +209,7 @@ mod tests {
             Ok("true".to_owned())
         );
         assert_eq!(
-            handler.handle(&mut evaluator, &[node_string("foo"), node_string("bar")]),
+            handler.handle(&mut worker, &[node_string("foo"), node_string("bar")]),
             Ok("".to_owned())
         );
     }
@@ -221,22 +217,19 @@ mod tests {
     #[test]
     fn test_not_equals() {
         let mut evaluator = Evaluator::new();
-        evaluator.register("concat", Box::new(Concat));
+        evaluator.register_prelude("concat", Box::new(Concat));
+        let mut worker = Worker::new(&mut evaluator);
         let handler = NotEquals;
 
-        assert!(handler.handle(&mut evaluator, &[]).is_err());
-        assert!(
-            handler
-                .handle(&mut evaluator, &[node_string("foo")])
-                .is_err()
-        );
+        assert!(handler.handle(&mut worker, &[]).is_err());
+        assert!(handler.handle(&mut worker, &[node_string("foo")]).is_err());
         assert_eq!(
-            handler.handle(&mut evaluator, &[node_string("foo"), node_string("foo")]),
+            handler.handle(&mut worker, &[node_string("foo"), node_string("foo")]),
             Ok("".to_owned())
         );
         assert_eq!(
             handler.handle(
-                &mut evaluator,
+                &mut worker,
                 &[
                     node_children(vec![node_string("concat"), node_string("foo")]),
                     node_string("foo")
@@ -246,7 +239,7 @@ mod tests {
         );
         assert_eq!(
             handler.handle(
-                &mut evaluator,
+                &mut worker,
                 &[
                     node_string("foo"),
                     node_children(vec![node_string("concat"), node_string("foo")])
@@ -255,7 +248,7 @@ mod tests {
             Ok("".to_owned())
         );
         assert_eq!(
-            handler.handle(&mut evaluator, &[node_string("foo"), node_string("bar")]),
+            handler.handle(&mut worker, &[node_string("foo"), node_string("bar")]),
             Ok("true".to_owned())
         );
     }

@@ -1,7 +1,8 @@
 use std::borrow::Cow;
-use std::rc::Rc;
 use std::collections::HashMap;
 use std::path::Path;
+use std::rc::Rc;
+use std::sync::RwLock;
 use log;
 use serde_json;
 use rand;
@@ -40,21 +41,16 @@ pub enum StoredValue {
 }
 
 pub struct Evaluator {
-    current_slug: Option<Slug>,
-
-    pub parser: Parser,
     pub markdown: markdown::MarkdownRenderer,
     pub highlighter: SyntaxHighlighter,
 
     prelude_ctx: HashMap<String, Rc<StoredValue>>,
-    pub ctx: HashMap<String, Rc<StoredValue>>,
-    pub refdefs: HashMap<String, RefDef>,
-    pub theme_config: serde_json::map::Map<String, serde_json::Value>,
-    pub toctree: TocTree,
+    pub refdefs: RwLock<HashMap<String, RefDef>>,
+    pub toctree: RwLock<TocTree>,
 
     placeholder_pattern: Regex,
     placeholder_prefix: String,
-    pub pending_links: Vec<(PlaceholderAction, String)>,
+    pub pending_links: RwLock<Vec<(PlaceholderAction, String)>>,
 }
 
 impl Evaluator {
@@ -78,19 +74,15 @@ impl Evaluator {
             Regex::new(&pattern_text).expect("Failed to compile linker pattern");
 
         Evaluator {
-            current_slug: None,
-            parser: Parser::new(),
             markdown: markdown::MarkdownRenderer::new(),
             highlighter: SyntaxHighlighter::new(syntax_theme),
             prelude_ctx: HashMap::new(),
-            ctx: HashMap::new(),
-            refdefs: HashMap::new(),
-            theme_config: serde_json::map::Map::new(),
-            toctree: TocTree::new(Slug::new("index".to_owned()), true),
+            refdefs: RwLock::new(HashMap::new()),
+            toctree: RwLock::new(TocTree::new(Slug::new("index".to_owned()), true)),
 
             placeholder_pattern,
             placeholder_prefix,
-            pending_links: vec![],
+            pending_links: RwLock::new(vec![]),
         }
     }
 
@@ -103,21 +95,55 @@ impl Evaluator {
             .insert(name.into(), Rc::new(StoredValue::Directive(handler)));
     }
 
-    pub fn register<S: Into<String>>(
-        &mut self,
-        name: S,
-        handler: Box<directives::DirectiveHandler>,
-    ) {
-        self.ctx
-            .insert(name.into(), Rc::new(StoredValue::Directive(handler)));
+    pub fn substitute(&self, page: &Page) -> Result<String, ()> {
+        let result = self.placeholder_pattern
+            .replace_all(&page.body, |captures: &Captures| {
+                let ref_number = str::parse::<u64>(&captures[1]).expect("Failed to parse refid");
+                let r1 = self.pending_links.read().unwrap();
+                let r2 = self.refdefs.read().unwrap();
+                let &(ref action, ref refid) =
+                    r1.get(ref_number as usize).expect("Missing ref number");
+                let refdef = match r2.get(refid) {
+                    Some(r) => r,
+                    None => {
+                        return "unknown refdef".to_owned();
+                    }
+                };
+
+                match *action {
+                    PlaceholderAction::Path => page.slug.path_to(refdef.slug.as_ref(), true),
+                    PlaceholderAction::Title => refdef.title.to_owned(),
+                }
+            });
+
+        Ok(result.into_owned())
+    }
+}
+
+pub struct Worker<'a> {
+    current_slug: Option<Slug>,
+    pub parser: Parser,
+
+    evaluator: &'a Evaluator,
+    pub ctx: HashMap<String, Rc<StoredValue>>,
+    pub theme_config: serde_json::map::Map<String, serde_json::Value>,
+}
+
+impl<'a> Worker<'a> {
+    pub fn new(evaluator: &'a Evaluator) -> Self {
+        Worker {
+            current_slug: None,
+            parser: Parser::new(),
+            evaluator: evaluator,
+            ctx: HashMap::new(),
+            theme_config: serde_json::map::Map::new(),
+        }
     }
 
-    pub fn add_asset(&self, path: &str) -> Result<String, ()> {
-        let output_slug = Slug::new(format!("_static/{}", path));
-        let slug = self.current_slug
-            .as_ref()
-            .expect("current_slug not yet initialized");
-        Ok(slug.path_to(output_slug.as_ref(), true))
+    pub fn render_markdown(&self, md: &str) -> (String, String) {
+        self.evaluator
+            .markdown
+            .render(md, &self.evaluator.highlighter)
     }
 
     pub fn evaluate(&mut self, node: &Node) -> String {
@@ -142,6 +168,76 @@ impl Evaluator {
         }
     }
 
+    pub fn lookup(&mut self, node: &Node, key: &str, args: &[Node]) -> Result<String, ()> {
+        let stored = match self.ctx
+            .get(key)
+            .or_else(|| self.evaluator.prelude_ctx.get(key))
+        {
+            Some(val) => Rc::clone(val),
+            None => {
+                self.error(node, &format!("Unknown name: '{}'", key));
+                return Err(());
+            }
+        };
+
+        match *stored {
+            StoredValue::Node(ref stored_node) => Ok(self.evaluate(stored_node)),
+            StoredValue::Directive(ref handler) => handler.handle(self, args),
+        }
+    }
+
+    pub fn set_slug(&mut self, slug: Slug) {
+        self.current_slug = Some(slug);
+        self.ctx.clear();
+        self.theme_config.clear();
+    }
+
+    pub fn get_slug(&self) -> &Slug {
+        self.current_slug
+            .as_ref()
+            .expect("Requested slug before set")
+    }
+
+    pub fn add_asset(&self, path: &str) -> Result<String, ()> {
+        let output_slug = Slug::new(format!("_static/{}", path));
+        let slug = self.current_slug
+            .as_ref()
+            .expect("current_slug not yet initialized");
+        Ok(slug.path_to(output_slug.as_ref(), true))
+    }
+
+    pub fn register<S: Into<String>>(
+        &mut self,
+        name: S,
+        handler: Box<directives::DirectiveHandler>,
+    ) {
+        self.ctx
+            .insert(name.into(), Rc::new(StoredValue::Directive(handler)));
+    }
+
+    pub fn get_placeholder(&mut self, refid: String, action: PlaceholderAction) -> String {
+        let mut txn = self.evaluator.pending_links.write().unwrap();
+        txn.push((action, refid));
+        format!("%{}-{}%", self.evaluator.placeholder_prefix, txn.len() - 1)
+    }
+
+    pub fn insert_refdef(&self, refid: String, refdef: RefDef) {
+        self.evaluator
+            .refdefs
+            .write()
+            .unwrap()
+            .insert(refid, refdef);
+    }
+
+    pub fn add_to_toctree(&self, slug: Slug, title: Option<String>) {
+        let current_slug = self.current_slug.as_ref().unwrap();
+        self.evaluator
+            .toctree
+            .write()
+            .unwrap()
+            .add(current_slug, slug, title);
+    }
+
     pub fn log(&self, node: &Node, message: &str, level: log::LogLevel) {
         let file_path = self.parser.get_node_source_path(node);
         log!(
@@ -164,67 +260,5 @@ impl Evaluator {
 
     pub fn error(&self, node: &Node, message: &str) {
         self.log(node, message, log::LogLevel::Error);
-    }
-
-    pub fn reset(&mut self) {
-        self.ctx.clear();
-        self.theme_config.clear();
-    }
-
-    pub fn set_slug(&mut self, slug: Slug) {
-        self.current_slug = Some(slug);
-    }
-
-    pub fn get_slug(&self) -> &Slug {
-        self.current_slug
-            .as_ref()
-            .expect("Requested slug before set")
-    }
-
-    pub fn get_placeholder(&mut self, refid: String, action: PlaceholderAction) -> String {
-        self.pending_links.push((action, refid));
-        format!(
-            "%{}-{}%",
-            self.placeholder_prefix,
-            self.pending_links.len() - 1
-        )
-    }
-
-    pub fn substitute(&self, page: &Page) -> Result<String, ()> {
-        let result = self.placeholder_pattern
-            .replace_all(&page.body, |captures: &Captures| {
-                let ref_number = str::parse::<u64>(&captures[1]).expect("Failed to parse refid");
-                let &(ref action, ref refid) = self.pending_links
-                    .get(ref_number as usize)
-                    .expect("Missing ref number");
-                let refdef = match self.refdefs.get(refid) {
-                    Some(r) => r,
-                    None => {
-                        return "unknown refdef".to_owned();
-                    }
-                };
-
-                match *action {
-                    PlaceholderAction::Path => page.slug.path_to(refdef.slug.as_ref(), true),
-                    PlaceholderAction::Title => refdef.title.to_owned(),
-                }
-            });
-
-        Ok(result.into_owned())
-    }
-
-    pub fn lookup(&mut self, node: &Node, key: &str, args: &[Node]) -> Result<String, ()> {
-        let stored = match self.ctx.get(key).or_else(|| self.prelude_ctx.get(key)) {
-            Some(val) => Rc::clone(val),
-            None => {
-                self.error(node, &format!("Unknown name: '{}'", key));
-                return Err(());
-            }
-        };
-
-        match *stored {
-            StoredValue::Node(ref stored_node) => Ok(self.evaluate(stored_node)),
-            StoredValue::Directive(ref handler) => handler.handle(self, args),
-        }
     }
 }
