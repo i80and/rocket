@@ -52,8 +52,8 @@ impl TocTree {
             .push(new_element);
     }
 
-    pub fn finish(&mut self, titles: HashMap<Slug, String>) {
-        self.titles = titles;
+    pub fn finish(&mut self, titles: &HashMap<Slug, String>) {
+        self.titles = titles.clone();
     }
 
     pub fn generate_html(

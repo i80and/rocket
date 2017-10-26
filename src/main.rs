@@ -35,11 +35,13 @@ mod toctree;
 
 use std::collections::HashMap;
 use std::convert::From;
-use std::{env, mem, process};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
-use std::sync::{Arc, RwLock};
+use std::ops::DerefMut;
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+use std::{env, mem, process};
 use evaluator::{Evaluator, Worker};
 use page::{Page, Slug};
 use toctree::TocTree;
@@ -187,69 +189,105 @@ impl Project {
     }
 }
 
-fn build_project(project: Project, mut evaluator: Evaluator) {
-    let mut pending_pages = vec![];
-    let mut titles = HashMap::new();
+fn build_project(project: Project, evaluator: Evaluator) {
+    let num_cpus = num_cpus::get();
+    let project = Arc::new(project);
+    let evaluator = Arc::new(evaluator);
+    let titles: Arc<Mutex<HashMap<Slug, String>>> = Arc::new(Mutex::new(HashMap::new()));
+    let pending_pages: Arc<Mutex<Vec<Page>>> = Arc::new(Mutex::new(vec![]));
 
-    {
-        let mut worker = Worker::new_with_options(&evaluator, &project.syntax_theme);
-        for entry in walkdir::WalkDir::new(&project.content_dir) {
-            let entry = entry.expect("Failed to walk dir");
-            if !entry.file_type().is_file() {
-                continue;
-            }
+    debug!("Crawling source directory");
 
-            if entry.path().extension() != Some("rocket".as_ref()) {
-                continue;
-            }
-
-            let path = entry.path();
-            let slug = path.strip_prefix(&project.content_dir)
-                .expect("Failed to get output path");
-            let dir = slug.parent().unwrap();
-            let stem = slug.file_stem().unwrap();
-            let slug = Slug::new(dir.join(stem).to_string_lossy().as_ref().to_owned());
-            worker.set_slug(slug);
-
-            match project.build_file(&mut worker, path) {
-                Ok(page) => {
-                    titles.insert(page.slug.to_owned(), page.title());
-                    pending_pages.push(page);
-                }
-                Err(_) => {
-                    error!("Failed to build {}", path.to_string_lossy());
-                }
-            }
+    let mut paths = vec![];
+    for entry in walkdir::WalkDir::new(&project.content_dir) {
+        let entry = entry.expect("Failed to walk dir");
+        if !entry.file_type().is_file() {
+            continue;
         }
+
+        if entry.path().extension() != Some("rocket".as_ref()) {
+            continue;
+        }
+
+        paths.push(entry.path().to_owned());
     }
 
-    let mut toctree = mem::replace(&mut evaluator.toctree, RwLock::new(TocTree::new_empty()))
-        .into_inner()
-        .unwrap();
-    toctree.finish(titles);
+    debug!("Compiling with {} workers", num_cpus);
+    let paths = Arc::new(paths);
+    let chunk_size = (paths.len() as f32 / num_cpus as f32).ceil() as usize;
+    let chunks: Vec<_> = paths
+        .chunks(chunk_size)
+        .map(|x| x.to_owned())
+        .collect();
+    let mut threads = Vec::with_capacity(chunks.len());
+    for chunk in chunks {
+        let project = Arc::clone(&project);
+        let evaluator = Arc::clone(&evaluator);
+        let titles = Arc::clone(&titles);
+        let pending_pages = Arc::clone(&pending_pages);
+
+        let thread = std::thread::spawn(move || {
+            let mut worker = Worker::new_with_options(&evaluator, &project.syntax_theme);
+
+            for path in chunk {
+                let slug = path.strip_prefix(&project.content_dir)
+                    .expect("Failed to get output path");
+                let dir = slug.parent().unwrap();
+                let stem = slug.file_stem().unwrap();
+                let slug = Slug::new(dir.join(stem).to_string_lossy().as_ref().to_owned());
+                worker.set_slug(slug);
+
+                match project.build_file(&mut worker, &path) {
+                    Ok(page) => {
+                        titles
+                            .lock()
+                            .unwrap()
+                            .insert(page.slug.to_owned(), page.title());
+                        pending_pages.lock().unwrap().push(page);
+                    }
+                    Err(_) => {
+                        error!("Failed to build {}", path.to_string_lossy());
+                    }
+                }
+            }
+        });
+
+        threads.push(thread);
+    }
+
+    for thread in threads {
+        thread.join().unwrap();
+    }
+
+    let mut toctree = {
+        let mut txn = evaluator.toctree.write().unwrap();
+        mem::replace(txn.deref_mut(), TocTree::new_empty())
+    };
+
+    toctree.finish(titles.lock().unwrap().deref());
 
     let theme = theme::Theme::load(&project.theme).expect("Failed to load theme");
 
-    let project = Arc::new(project);
-    let evaluator = Arc::new(evaluator);
     let renderer = Arc::new(
         theme::Renderer::new(theme, Arc::new(toctree)).expect("Failed to construct renderer"),
     );
 
-    let num_cpus = num_cpus::get() as u32;
     debug!("Linking with {} workers", num_cpus);
 
-    let mut pool = Pool::new(num_cpus);
-    pool.scoped(move |scoped| for page in pending_pages.drain(0..) {
-        let project = Arc::clone(&project);
-        let evaluator = Arc::clone(&evaluator);
-        let renderer = Arc::clone(&renderer);
+    let mut pool = Pool::new(num_cpus as u32);
+    pool.scoped(move |scoped| {
+        let mut pending_pages = pending_pages.lock().unwrap();
+        for page in pending_pages.drain(0..) {
+            let project = Arc::clone(&project);
+            let evaluator = Arc::clone(&evaluator);
+            let renderer = Arc::clone(&renderer);
 
-        scoped.execute(move || {
-            project
-                .link_file(&evaluator, &page, &renderer)
-                .expect("Failed to link page");
-        });
+            scoped.execute(move || {
+                project
+                    .link_file(&evaluator, &page, &renderer)
+                    .expect("Failed to link page");
+            });
+        }
     });
 }
 
