@@ -25,9 +25,13 @@ fn escape_string(s: &str) -> String {
     s.chars().flat_map(|c| c.escape_default()).collect()
 }
 
-fn concat_nodes(iter: &mut slice::Iter<Node>, worker: &mut Worker) -> String {
+fn concat_nodes(iter: &mut slice::Iter<Node>, worker: &mut Worker, sep: &'static str) -> String {
     iter.map(|node| worker.evaluate(node))
-        .fold(String::new(), |r, c| r + &c)
+        .fold(String::new(), |r, c| if r.is_empty() {
+            c
+        } else {
+            r + sep + &c
+        })
 }
 
 pub trait DirectiveHandler {
@@ -49,7 +53,7 @@ impl DirectiveHandler for Code {
     fn handle(&self, worker: &mut Worker, args: &[Node]) -> Result<String, ()> {
         let mut iter = args.iter();
         let language = consume_string(&mut iter, worker).ok_or(())?;
-        let literal = concat_nodes(&mut iter, worker);
+        let literal = concat_nodes(&mut iter, worker, "");
 
         worker
             .highlighter
@@ -130,7 +134,7 @@ pub struct Concat;
 impl DirectiveHandler for Concat {
     fn handle(&self, worker: &mut Worker, args: &[Node]) -> Result<String, ()> {
         let mut iter = args.iter();
-        Ok(concat_nodes(&mut iter, worker))
+        Ok(concat_nodes(&mut iter, worker, ""))
     }
 }
 
@@ -604,6 +608,37 @@ impl DirectiveHandler for Figure {
     }
 }
 
+pub struct FormattingMarker {
+    tag: &'static str,
+}
+
+impl FormattingMarker {
+    pub fn new(tag: &'static str) -> Self {
+        Self { tag }
+    }
+}
+
+impl DirectiveHandler for FormattingMarker {
+    fn handle(&self, worker: &mut Worker, args: &[Node]) -> Result<String, ()> {
+        let mut iter = args.iter();
+        let body = concat_nodes(&mut iter, worker, " ");
+        Ok(format!("<{}>{}</{}>", self.tag, body, self.tag))
+    }
+}
+
+pub struct Link;
+
+impl DirectiveHandler for Link {
+    fn handle(&self, worker: &mut Worker, args: &[Node]) -> Result<String, ()> {
+        let mut iter = args.iter();
+        let href = consume_string(&mut iter, worker).ok_or(())?;
+        let href = escape_string(&href);
+        let body = concat_nodes(&mut iter, worker, " ");
+        let b = if body.is_empty() { &href } else { &body };
+        Ok(format!(r#"<a href="{}">{}</a>"#, href, b))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -954,6 +989,66 @@ mod tests {
         assert_eq!(
             handler.handle(&mut worker, &[node_string("foo.png"), node_string("foo")]),
             Ok(r#"<img src="../../_static/foo.png" alt="foo">"#.to_owned())
+        );
+    }
+
+    #[test]
+    fn test_formatting_marker() {
+        let mut evaluator = Evaluator::new();
+        let mut worker = Worker::new(&mut evaluator);
+        worker.register("concat", Box::new(Concat));
+
+        let handler = FormattingMarker::new("strong");
+        assert_eq!(
+            handler.handle(&mut worker, &[]),
+            Ok(r#"<strong></strong>"#.to_owned())
+        );
+        assert_eq!(
+            handler.handle(&mut worker, &[node_string("foo"), node_string("bar")]),
+            Ok(r#"<strong>foo bar</strong>"#.to_owned())
+        );
+        assert_eq!(
+            handler.handle(
+                &mut worker,
+                &[
+                    node_children(vec![
+                        node_string("concat"),
+                        node_string("1"),
+                        node_string("2"),
+                    ],),
+                    node_string("bar")
+                ]
+            ),
+            Ok(r#"<strong>12 bar</strong>"#.to_owned())
+        );
+    }
+
+    #[test]
+    fn test_link() {
+        let mut evaluator = Evaluator::new();
+        let mut worker = Worker::new(&mut evaluator);
+        worker.register("concat", Box::new(Concat));
+        let handler = Link;
+        assert!(handler.handle(&mut worker, &[]).is_err());
+        assert_eq!(
+            handler.handle(&mut worker, &[node_string("https://foxquill.com")]),
+            Ok(r#"<a href="https://foxquill.com">https://foxquill.com</a>"#.to_owned())
+        );
+
+        assert_eq!(
+            handler.handle(
+                &mut worker,
+                &[
+                    node_string("https://foxquill.com"),
+                    node_children(vec![
+                        node_string("concat"),
+                        node_string("foo"),
+                        node_string("bar"),
+                    ]),
+                    node_string("baz")
+                ]
+            ),
+            Ok(r#"<a href="https://foxquill.com">foobar baz</a>"#.to_owned())
         );
     }
 }

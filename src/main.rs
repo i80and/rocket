@@ -317,7 +317,13 @@ fn build(verbose: bool) {
     evaluator.register_prelude("toctree", Box::new(directives::TocTree));
     evaluator.register_prelude("define-ref", Box::new(directives::RefDefDirective));
     evaluator.register_prelude("ref", Box::new(directives::RefDirective));
+    evaluator.register_prelude("link", Box::new(directives::Link));
     evaluator.register_prelude("figure", Box::new(directives::Figure));
+
+    // Formatting
+    evaluator.register_prelude("``", Box::new(directives::FormattingMarker::new("code")));
+    evaluator.register_prelude("**", Box::new(directives::FormattingMarker::new("strong")));
+    evaluator.register_prelude("__", Box::new(directives::FormattingMarker::new("em")));
 
     // Headers
     evaluator.register_prelude("h1", Box::new(directives::Heading::new(1)));
