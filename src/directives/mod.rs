@@ -639,6 +639,34 @@ impl DirectiveHandler for Link {
     }
 }
 
+pub struct List {
+    tag: &'static str,
+}
+
+impl List {
+    pub fn new(tag: &'static str) -> Self {
+        Self { tag }
+    }
+}
+
+impl DirectiveHandler for List {
+    fn handle(&self, worker: &mut Worker, args: &[Node]) -> Result<String, ()> {
+        let body: Vec<String> = args.iter()
+            .map(|node| {
+                let item_body = worker.evaluate(node);
+                format!("<li>{}</li>", item_body)
+            })
+            .collect();
+
+        Ok(format!(
+            "<{}>{}</{}>",
+            self.tag,
+            body.as_slice().concat(),
+            self.tag
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

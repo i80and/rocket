@@ -319,6 +319,8 @@ fn build(verbose: bool) {
     evaluator.register_prelude("ref", Box::new(directives::RefDirective));
     evaluator.register_prelude("link", Box::new(directives::Link));
     evaluator.register_prelude("figure", Box::new(directives::Figure));
+    evaluator.register_prelude("ul", Box::new(directives::List::new("ul")));
+    evaluator.register_prelude("ol", Box::new(directives::List::new("ol")));
 
     // Formatting
     evaluator.register_prelude("``", Box::new(directives::FormattingMarker::new("code")));
