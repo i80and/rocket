@@ -75,13 +75,16 @@ pub fn lex(data: &str) -> Vec<Token> {
                 None => Token::Character(lineno, '('),
                 _ => panic!("Bad character matched: Expected ':' or nothing"),
             },
-            b'=' => match bytes.get(1) {
-                Some(&b'>') => {
+            b'=' => {
+                let next = data_bytes.get(pat_match.end());
+                if next != Some(&b'\n') {
+                    Token::Text(lineno, token_text)
+                } else if bytes == b"=>" {
                     start_rocket = true;
                     Token::Rocket
+                } else {
+                    Token::Character(lineno, '=')
                 }
-                None => Token::Character(lineno, '='),
-                _ => panic!("Bad character matched: Expected '>' or nothing"),
             },
             _ => Token::Text(lineno, token_text),
         };
@@ -148,7 +151,7 @@ mod tests {
   (:note =>
     more stuff
 
-    second paragraph
+    second =>paragraph
 
   closing nested
 "#
@@ -190,6 +193,7 @@ mod tests {
                 Token::Character(8, '\n'),
                 Token::Text(9, "second"),
                 Token::Text(9, " "),
+                Token::Text(9, "=>"),
                 Token::Text(9, "paragraph"),
                 Token::Character(9, '\n'),
                 Token::Character(10, '\n'),
