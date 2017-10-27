@@ -215,10 +215,7 @@ fn build_project(project: Project, evaluator: Evaluator) {
     debug!("Compiling with {} workers", num_cpus);
     let paths = Arc::new(paths);
     let chunk_size = (paths.len() as f32 / num_cpus as f32).ceil() as usize;
-    let chunks: Vec<_> = paths
-        .chunks(chunk_size)
-        .map(|x| x.to_owned())
-        .collect();
+    let chunks: Vec<_> = paths.chunks(chunk_size).map(|x| x.to_owned()).collect();
     let mut threads = Vec::with_capacity(chunks.len());
     for chunk in chunks {
         let project = Arc::clone(&project);

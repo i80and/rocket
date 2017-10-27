@@ -660,18 +660,22 @@ impl<'o> HtmlFormatter<'o> {
                         first_tag += 1;
                     }
 
-                    try!(self.append_html(b"<pre lang=\""));
-
-                    let tag = ncb.info[..first_tag].to_owned();
-                    let tag = String::from_utf8(tag)
+                    let tag = &ncb.info[..first_tag];
+                    let tag_string = String::from_utf8(tag.to_owned())
                         .ok()
                         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, ""))?;
+
+                    try!(self.append_html(b"<pre lang=\""));
+                    try!(self.escape(tag));
+                    try!(self.output.write_all(b"\"><code>"));
+
+
                     let literal = ncb.literal.to_owned();
                     let literal = String::from_utf8(literal)
                         .ok()
                         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, ""))?;
 
-                    match self.highlighter.highlight(&tag, &literal) {
+                    match self.highlighter.highlight(&tag_string, &literal) {
                         Ok(s) => {
                             try!(self.append_html(s.as_bytes()));
                         }
@@ -679,10 +683,7 @@ impl<'o> HtmlFormatter<'o> {
                             try!(self.escape(&ncb.info[..first_tag]));
                         }
                     }
-                    try!(self.escape(&ncb.info[..first_tag]));
-                    try!(self.append_html(b"\"><code>"));
                 }
-                try!(self.escape(&ncb.literal));
                 try!(self.append_html(b"</code></pre>\n"));
             },
             NodeValue::HtmlBlock(ref nhb) => if entering {
