@@ -251,7 +251,7 @@ fn build_project(project: Project, evaluator: Evaluator) {
     }
 
     for thread in threads {
-        thread.join().unwrap();
+        thread.join().expect("At least one compilation worker panicked");
     }
 
     let mut toctree = {
