@@ -528,7 +528,7 @@ impl DirectiveHandler for RefDirective {
 
         let placeholder = worker.get_placeholder(refid, PlaceholderAction::Path);
 
-        Ok(format!("[{}]({})", title, placeholder))
+        Ok(format!(r#"<a href="{}">{}</a>"#, placeholder, title))
     }
 }
 
