@@ -25,6 +25,7 @@ mod directives;
 mod evaluator;
 mod highlighter;
 mod init;
+mod inject_paragraphs;
 mod lex;
 mod page;
 mod parse;
@@ -41,6 +42,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::{env, mem, process};
 use evaluator::{Evaluator, Worker};
+use inject_paragraphs::inject_paragraphs;
 use page::{Page, Slug};
 use toctree::TocTree;
 use directives::logic;
@@ -143,6 +145,7 @@ impl Project {
 
         let mut output = worker.evaluate(&node);
         output.push_str(&worker.close_sections());
+        let output = inject_paragraphs(&output);
 
         let page = Page {
             source_path: path.to_owned(),
