@@ -141,7 +141,8 @@ impl Project {
             }
         };
 
-        let output = worker.evaluate(&node);
+        let mut output = worker.evaluate(&node);
+        output.push_str(&worker.close_sections());
 
         let page = Page {
             source_path: path.to_owned(),
@@ -251,7 +252,9 @@ fn build_project(project: Project, evaluator: Evaluator) {
     }
 
     for thread in threads {
-        thread.join().expect("At least one compilation worker panicked");
+        thread
+            .join()
+            .expect("At least one compilation worker panicked");
     }
 
     let mut toctree = {

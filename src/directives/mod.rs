@@ -438,29 +438,31 @@ impl DirectiveHandler for TocTree {
     }
 }
 
-fn title_to_id(title: &str) -> String {
-    let mut result = String::with_capacity(title.len());
-
-    for c in title.chars() {
-        if c.is_alphanumeric() {
-            result.extend(c.to_lowercase());
-        } else if c == '-' || c == '_' {
-            result.push(c);
-        } else {
-            result.push_str(&(c as u32).to_string());
-        }
-    }
-
-    result
-}
-
 pub struct Heading {
-    level: u8,
+    level: i8,
 }
 
 impl Heading {
-    pub fn new(level: u8) -> Self {
+    pub fn new(level: i8) -> Self {
         Heading { level }
+    }
+
+    fn title_to_id(title: &str) -> String {
+        let mut result = String::with_capacity(title.len());
+
+        for c in title.chars() {
+            if c.is_alphanumeric() {
+                result.extend(c.to_lowercase());
+            } else if c == '-' || c == '_' {
+                result.push(c);
+            } else if c == ' ' {
+                result.push('-');
+            } else {
+                result.push_str(&(c as u32).to_string());
+            }
+        }
+
+        result
     }
 }
 
@@ -477,7 +479,7 @@ impl DirectiveHandler for Heading {
                 (title, arg1)
             }
             None => {
-                let title_id = title_to_id(&arg1);
+                let title_id = Self::title_to_id(&arg1);
                 (arg1, title_id)
             }
         };
@@ -489,8 +491,11 @@ impl DirectiveHandler for Heading {
             );
         }
 
+        let prefix = worker.handle_heading(self.level)?;
+
         Ok(format!(
-            r#"<h{} id="{}">{}</h{}>"#,
+            r#"{}<h{} id="{}">{}</h{}>"#,
+            prefix,
             self.level,
             refdef,
             title,
@@ -925,13 +930,40 @@ mod tests {
             let handler = Heading::new(2);
 
             assert!(handler.handle(&mut worker, &[]).is_err());
+            assert!(
+                handler
+                    .handle(&mut worker, &[node_string("A Title")])
+                    .is_err()
+            );
+
+            let handler = Heading::new(1);
             assert_eq!(
                 handler.handle(
                     &mut worker,
                     &[node_string("a-title"), node_string("A Title")]
                 ),
-                Ok(r#"<h2 id="a-title">A Title</h2>"#.to_owned())
+                Ok(r#"<section><h1 id="a-title">A Title</h1>"#.to_owned())
             );
+
+            let handler = Heading::new(2);
+            assert_eq!(
+                handler.handle(&mut worker, &[node_string("A Second Title")]),
+                Ok(r#"<section><h2 id="a-second-title">A Second Title</h2>"#.to_owned())
+            );
+
+            let handler = Heading::new(3);
+            assert_eq!(
+                handler.handle(&mut worker, &[node_string("A Third Title")]),
+                Ok(r#"<section><h3 id="a-third-title">A Third Title</h3>"#.to_owned())
+            );
+
+            let handler = Heading::new(1);
+            assert_eq!(
+                handler.handle(&mut worker, &[node_string("A Fourth Title")]),
+                Ok(r#"</section></section><h1 id="a-fourth-title">A Fourth Title</h1>"#.to_owned())
+            );
+
+            assert_eq!(worker.close_sections(), "</section>".to_owned());
         }
 
         assert_eq!(

@@ -113,6 +113,7 @@ pub struct Worker<'a> {
     pub highlighter: SyntaxHighlighter,
 
     current_slug: Option<Slug>,
+    current_level: i8,
     pub parser: Parser,
 
     evaluator: &'a Evaluator,
@@ -130,6 +131,7 @@ impl<'a> Worker<'a> {
         Worker {
             highlighter: SyntaxHighlighter::new(syntax_theme),
             current_slug: None,
+            current_level: 0,
             parser: Parser::new(),
             evaluator: evaluator,
             ctx: HashMap::new(),
@@ -179,6 +181,7 @@ impl<'a> Worker<'a> {
 
     pub fn set_slug(&mut self, slug: Slug) {
         self.current_slug = Some(slug);
+        self.current_level = 0;
         self.ctx.clear();
         self.theme_config.clear();
     }
@@ -227,6 +230,25 @@ impl<'a> Worker<'a> {
             .write()
             .unwrap()
             .add(current_slug, slug, title);
+    }
+
+    pub fn handle_heading(&mut self, level: i8) -> Result<String, ()> {
+        let prefix = if level == self.current_level + 1 {
+            "<section>".to_owned()
+        } else if level == self.current_level {
+            "".to_owned()
+        } else if level < self.current_level {
+            "</section>".repeat((self.current_level - level) as usize)
+        } else {
+            return Err(());
+        };
+
+        self.current_level = level;
+        Ok(prefix)
+    }
+
+    pub fn close_sections(&self) -> String {
+        "</section>".repeat(self.current_level as usize)
     }
 
     pub fn log(&self, node: &Node, message: &str, level: log::LogLevel) {

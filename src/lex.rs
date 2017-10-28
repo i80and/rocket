@@ -85,7 +85,7 @@ pub fn lex(data: &str) -> Vec<Token> {
                 } else {
                     Token::Character(lineno, '=')
                 }
-            },
+            }
             _ => Token::Text(lineno, token_text),
         };
 
