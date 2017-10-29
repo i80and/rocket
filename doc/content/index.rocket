@@ -1,31 +1,18 @@
-(:import prelude.rock)
+(:h1 Rocket)
 
-(:h1 home Home)
+Rocket is a fast and powerful text markup format.
 
-Rocket is a fast, powerful, and homoiconic text markup format.
+(:h2 (:ref writing-your-first-project "Getting Started"))
+(:h2 Example)
+(:define evaluate "(" "(")
+(:code txt =>
+    (:():h1 Rocket)
 
-Example ref: (:ref writing-your-first-project).
+    Rocket is a fast and powerful text markup format.
 
-(:h2 "Level 2 Title")
+    (:():h2 (:():ref writing-your-first-project "Getting Started"))
 
-(:h2 "Same Level")
-
-(:h3 "Level 3 Title")
-
-(:h2 "Back Up to Level 2")
-
-(:steps
-    (:step "First Step" "Do stuff")
-    (:step "Second Step" "Do other stuff")
-    (:step "Third Step" =>
-        Lorem ipsum
-
-        Sed facilisis
-)
-
-(:code sh =>
-    sudo apt-get install foobar
-    clear
+    (:():toctree "reference" "tutorials")
 
 (:toctree
   "reference"

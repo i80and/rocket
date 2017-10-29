@@ -1,0 +1,24 @@
+(:h1 installing-rocket "Installing Rocket")
+
+(:h2 "macOS")
+(:steps
+    (:step (:concat "Download" " " (:link "https://s3-us-west-2.amazonaws.com/i80and.foxquill.com/rocket.gz" Rocket)) "")
+    (:step "Uncompress and Install Rocket" =>
+        (:code sh =>
+            gunzip rocket.gz
+            install -m755 target/release/rocket /usr/local/bin/
+)
+
+
+(:h2 "Other Operating Systems")
+(:steps
+    (:step (:concat "Install" " " (:link "https://www.rust-lang.org/en-US/install.html" Rust)) "")
+
+    (:step "Clone, Build, and Install Rocket" =>
+        (:code sh =>
+            git clone https://github.com/i80and/rocket.git
+            cd rocket
+            cargo build --release
+            sudo install -m755 target/release/rocket /usr/local/bin/
+
+)

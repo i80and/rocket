@@ -1,1 +1,95 @@
-(:h1 "Directives Reference")
+(:h1 directives-reference "Directives Reference")
+(:define evaluate "(" "(")
+
+(:h2 (:`` code))
+The (:`` code) directive allows you to create code blocks with syntax
+higlighting.
+
+(:code txt =>
+    (:():code <language> <code>)
+
+(:h2 (:`` concat))
+The (:`` concat) directive concatenates multiple expression results into
+one string with no delimitation.
+
+(:code txt =>
+    (:():concat [<expr>, [<expr>, ...]])
+
+(:h2 (:`` define))
+The (:`` define) directive allows you to associate an expression or an
+expression's result with a name.
+
+(:code txt =>
+    (:():define [evaluate] <name> <value>)
+
+(:h2 (:`` define-template))
+The (:`` define-template) directive allows you to create a simple macro
+with argument checking.
+
+(:code txt =>
+    (:():define-template <name> <template> [<regex>, [<regex>, ...]])
+
+(:h2 (:`` figure))
+The (:`` figure) directive allows you to insert an image into the
+document.
+
+(:code txt =>
+    (:():figure <src> <alt> [<width>])
+
+(:h2 "Formatting Markers")
+(:h3 Bold)
+(:code txt =>
+    (:():** <expr>)
+(:h3 Italics)
+(:code txt =>
+    (:():__ <expr>)
+(:h3 Monospace)
+(:code txt =>
+    (:():`` <expr>)
+
+(:h2 Headings)
+(:code txt =>
+    (:():<h1|h2|h3|h4|h5|h6> [<id>] <title>)
+
+(:h2 (:`` include))
+The (:`` include) directives injects a Rocket source file into the current
+document.
+
+(:code txt =>
+    (:():include <path>)
+
+(:h2 (:`` import))
+The (:`` import) directives parses a Rocket source file and imports its
+definitions (as defined by (:`` define), (:`` define-template), etc.),
+but does not insert the file's contents into the document.
+
+(:code txt =>
+    (:():import <path>)
+
+(:h2 (:`` link))
+(:code txt =>
+    (:():link <href> <title>)
+
+(:h2 Lists)
+(:code txt =>
+    (:():<ul|ol> [<item>, [<item>, ...]])
+
+(:h2 (:`` define-ref))
+(:code txt =>
+    (:():define-ref <id> <title>)
+
+(:h2 (:`` ref))
+(:code txt =>
+    (:():ref <id> [<title>])
+
+(:h2 (:`` steps))
+(:code txt =>
+    (:():steps <language> <code>)
+
+(:h2 (:`` theme-config))
+(:code txt =>
+    (:():theme-config <key> <value>)
+
+(:h2 (:`` toctree))
+(:code txt =>
+    (:():toctree [<expr>, [<expr, ...]])

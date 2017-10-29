@@ -12,13 +12,19 @@ nav {
 nav ul {
   padding-left: 0;
 }
+
 nav li {
   list-style: none;
   margin-left: 10px;
 }
 
-nav li.current > a {
-  font-variant: small-caps;
+nav a {
+  text-decoration: none;
+}
+
+nav li.current > a:before {
+  content: '↠';
+  margin-left: -12px;
 }
 
 .body {
@@ -31,6 +37,13 @@ nav li.current > a {
 section {
   max-width: 800px;
 }
+
+h1 { font-size: 36px; }
+h2 { font-size: 24px; }
+h3 { font-size: 18px; }
+h4 { font-size: 14px; }
+h5 { font-size: 14px; }
+h6 { font-size: 14px; }
 
 pre {
   overflow-x: scroll;
