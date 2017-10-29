@@ -95,7 +95,8 @@ impl Evaluator {
                 let refdef = match r2.get(refid) {
                     Some(r) => r,
                     None => {
-                        return "unknown refdef".to_owned();
+                        error!("Unknown reference '{}' used in page {}", refid, page.source_path.to_string_lossy());
+                        return "".to_owned();
                     }
                 };
 
