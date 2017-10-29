@@ -22,7 +22,19 @@ fn consume_string(iter: &mut slice::Iter<Node>, worker: &mut Worker) -> Option<S
 }
 
 fn escape_string(s: &str) -> String {
-    s.chars().flat_map(|c| c.escape_default()).collect()
+    let mut result = String::with_capacity(s.len());
+    for ch in s.chars() {
+        match ch {
+            '"' => result.push_str("&#34;"),
+            '\'' => result.push_str("&#39;"),
+            '<' => result.push_str("&lt;"),
+            '>' => result.push_str("&gt;"),
+            '&' => result.push_str("&amp;"),
+            _ => result.push(ch),
+        }
+    }
+
+    result
 }
 
 fn concat_nodes(iter: &mut slice::Iter<Node>, worker: &mut Worker, sep: &'static str) -> String {
@@ -497,7 +509,7 @@ impl DirectiveHandler for Heading {
             r#"{}<h{} id="{}">{}</h{}>"#,
             prefix,
             self.level,
-            refdef,
+            escape_string(&refdef),
             title,
             self.level
         ))
@@ -1031,7 +1043,7 @@ mod tests {
                 &mut worker,
                 &[node_string("fo\"o.png"), node_string("al\"t")]
             ),
-            Ok(r#"<img src="_static/fo\"o.png" alt="al\"t">"#.to_owned())
+            Ok(r#"<img src="_static/fo&#34;o.png" alt="al&#34;t">"#.to_owned())
         );
         assert_eq!(
             handler.handle(
@@ -1042,7 +1054,7 @@ mod tests {
                     node_string("320")
                 ]
             ),
-            Ok(r#"<img src="_static/fo\"o.png" alt="al\"t" width=320px>"#.to_owned())
+            Ok(r#"<img src="_static/fo&#34;o.png" alt="al&#34;t" width=320px>"#.to_owned())
         );
 
         worker.set_slug(Slug::new("reference/directives".to_owned()));
