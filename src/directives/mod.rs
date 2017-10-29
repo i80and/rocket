@@ -66,10 +66,11 @@ impl DirectiveHandler for Code {
         let mut iter = args.iter();
         let language = consume_string(&mut iter, worker).ok_or(())?;
         let literal = concat_nodes(&mut iter, worker, "");
+        let trimmed = literal.trim();
 
         worker
             .highlighter
-            .highlight(&language, &literal)
+            .highlight(&language, trimmed)
             .ok()
             .ok_or(())
     }
