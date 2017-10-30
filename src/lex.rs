@@ -55,6 +55,7 @@ pub fn lex(data: &str) -> Vec<Token> {
 
                 let mut current_indentation_level =
                     *(indent.last().expect("Indentation stack is empty"));
+
                 while new_indentation_level < current_indentation_level {
                     indent.pop();
                     current_indentation_level =
@@ -66,6 +67,9 @@ pub fn lex(data: &str) -> Vec<Token> {
                     indent.push(new_indentation_level);
                     tokens.push(Token::Indent);
                     start_rocket = false;
+                } else if new_indentation_level > current_indentation_level {
+                    let indentation_text = &token_text[(1 + current_indentation_level)..];
+                    tokens.push(Token::Text(lineno, indentation_text));
                 }
 
                 continue;
@@ -202,6 +206,31 @@ mod tests {
                 Token::Text(11, " "),
                 Token::Text(11, "nested"),
                 Token::Character(11, '\n'),
+                Token::Dedent,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_rocket_indentation() {
+        assert_eq!(
+            lex(
+                r#"
+(:note =>
+  stuff
+    stuff"#.trim()
+            ),
+            vec![
+                Token::StartBlock(0),
+                Token::Text(0, "note"),
+                Token::Text(0, " "),
+                Token::Rocket,
+                Token::Character(0, '\n'),
+                Token::Indent,
+                Token::Text(1, "stuff"),
+                Token::Character(1, '\n'),
+                Token::Text(1, "  "),
+                Token::Text(2, "stuff"),
                 Token::Dedent,
             ]
         );
