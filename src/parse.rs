@@ -71,7 +71,6 @@ enum StackRequest {
     None,
     Pop(u8),
     Push(Box<TokenHandler>),
-    Error(&'static str, i32),
 }
 
 trait TokenHandler {
@@ -113,9 +112,6 @@ impl TokenHandler for StateRocket {
             Token::Text(_, s) => {
                 self.buffer.push(s.to_owned());
             }
-            Token::Character(_, c) => {
-                self.ensure_string().push(c);
-            }
             Token::Quote(_) => {
                 self.ensure_string().push('"');
             }
@@ -130,11 +126,8 @@ impl TokenHandler for StateRocket {
             Token::RightParen => {
                 self.ensure_string().push(')');
             }
-            Token::Rocket => {
+            Token::Rocket(_) => {
                 self.ensure_string().push_str("=>");
-            }
-            Token::Indent => {
-                return StackRequest::Error("Unexpected indentation token", self.lineno)
             }
             Token::Dedent => {
                 // We need to pop both the rocket and the expression that started the rocket
@@ -169,7 +162,6 @@ impl TokenHandler for StateRocket {
 
 struct StateExpression {
     root: Vec<Node>,
-    saw_rocket: bool,
     file_id: FileID,
     lineno: i32,
 
@@ -181,7 +173,6 @@ impl StateExpression {
     fn new(file_id: FileID, lineno: i32) -> Self {
         StateExpression {
             root: vec![],
-            saw_rocket: false,
             file_id,
             lineno,
             quote: vec![],
@@ -195,7 +186,6 @@ impl TokenHandler for StateExpression {
         if self.in_quote {
             match *token {
                 Token::Text(_, s) => self.quote.push(s.to_owned()),
-                Token::Character(_, c) => self.quote.push(c.to_string()),
                 Token::Quote(lineno) => {
                     self.root
                         .push(Node::new_string(self.quote.concat(), self.file_id, lineno));
@@ -205,8 +195,8 @@ impl TokenHandler for StateExpression {
                 }
                 Token::StartBlock(_) => self.quote.push("(:".to_owned()),
                 Token::RightParen => self.quote.push(")".to_owned()),
-                Token::Rocket => self.quote.push("=>".to_owned()),
-                Token::Indent | Token::Dedent => (),
+                Token::Rocket(_) => self.quote.push("=>".to_owned()),
+                Token::Dedent => (),
             }
             return StackRequest::None;
         }
@@ -219,33 +209,18 @@ impl TokenHandler for StateExpression {
                         .push(Node::new_string(s.to_owned(), self.file_id, lineno));
                 }
             }
-            Token::Character(lineno, c) => if !c.is_whitespace() {
-                self.root
-                    .push(Node::new_string(c.to_string(), self.file_id, lineno));
-            } else {
-                return StackRequest::None;
-            },
             Token::Quote(_) => {
                 self.in_quote = true;
             }
             Token::StartBlock(lineno) => {
                 return StackRequest::Push(Box::new(StateExpression::new(self.file_id, lineno)));
             }
-            Token::Rocket => {
-                self.saw_rocket = true;
-                return StackRequest::None;
+            Token::Rocket(lineno) => {
+                return StackRequest::Push(Box::new(StateRocket::new(self.file_id, lineno)));
             }
             Token::RightParen | Token::Dedent => {
                 return StackRequest::Pop(1);
             }
-            Token::Indent => if self.saw_rocket {
-                self.saw_rocket = false;
-                return StackRequest::Push(Box::new(StateRocket::new(self.file_id, self.lineno)));
-            },
-        }
-
-        if self.saw_rocket {
-            return StackRequest::Error("Expected indentation after =>", self.lineno);
         }
 
         StackRequest::None
@@ -270,7 +245,6 @@ impl TokenHandler for StateExpression {
 
 struct ParseContextStack {
     stack: Vec<Box<TokenHandler>>,
-    errors: Vec<(&'static str, i32)>,
 }
 
 impl ParseContextStack {
@@ -284,7 +258,6 @@ impl ParseContextStack {
                     lineno: lineno,
                 }),
             ],
-            errors: vec![],
         }
     }
 
@@ -302,7 +275,6 @@ impl ParseContextStack {
                 (**self.stack.last_mut().expect("Empty parse stack")).push(handler.finish());
             },
             StackRequest::None => (),
-            StackRequest::Error(msg, lineno) => self.errors.push((msg, lineno)),
         }
     }
 }
@@ -342,10 +314,6 @@ impl Parser {
         let mut stack = ParseContextStack::new(id, 0);
         for token in lex(&data) {
             stack.handle(&token);
-            if !stack.errors.is_empty() {
-                let (msg, lineno) = stack.errors[0];
-                return Err(format!("{}: line {}", msg, lineno));
-            }
         }
 
         let root = stack.stack.pop().expect("Empty state stack").finish();
