@@ -5,23 +5,9 @@ file_extensions: [rocket]
 scope: source.example-c
 contexts:
   main:
-    - match: '\(:\S+\b'
+    - match: '\(:\S+'
       scope: keyword.control.example-c
       push: expression
-
-    - match: '^#.*'
-      scope: keyword.operator.heading.rocket
-
-    - match: '^```.*'
-      scope: keyword.control.rocket
-      push: fenced_code_block
-
-    - match: '(`+)([^`]+?)(`+)'
-      comment: inline literal
-      captures:
-        1: keyword.control.rocket
-        2: variable.parameter.rocket.preformatted
-        3: keyword.control.rocket
 
   double_quoted_string:
     - meta_scope: string.quoted.double.rocket
@@ -44,7 +30,6 @@ contexts:
       scope: keyword.control.rocket
       pop: true
 
-  fenced_code_block:
-    - match: '^```$'
-      scope: keyword.control.rocket
-      pop: true
+    - match: '\(:\S+'
+      scope: keyword.control.example-c
+      push: expression

@@ -6,12 +6,6 @@ color yellow "\"(\\.|[^"])*\""
 # S-expression start
 color brightblue "\(:[a-z-]+|\(:\"[^\"]+\""
 
-# code
-color yellow   "`[^`]*`"
-# code blocks
-color yellow start="^```[^$]" end="^```$"
-color yellow "^```$"
-
 # End S-expression
 color brightblue "\)"
 
