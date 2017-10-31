@@ -48,7 +48,7 @@ pub fn lex(data: &str) -> Vec<Token> {
             _ if bytes.starts_with(b"\n") => {
                 let mut current_indentation_level =
                     *(indent.last().expect("Indentation stack is empty"));
-                let new_indentation_level = token_text.len() - 1;
+                let new_indentation_level = naive_count_32(bytes, b' ');
 
                 while new_indentation_level < current_indentation_level {
                     indent.pop();
@@ -200,6 +200,38 @@ mod tests {
                 Token::Text(1, "\n  "),
                 Token::Text(2, "stuff"),
                 Token::Dedent,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_multiline() {
+        assert_eq!(
+            lex(
+                "
+(:h2 =>
+  Example
+
+
+(:`` use
+<database>)"
+                    .trim()
+            ),
+            vec![
+                Token::StartBlock(0),
+                Token::Text(0, "h2"),
+                Token::Text(0, " "),
+                Token::Rocket(0),
+                Token::Text(1, "Example"),
+                Token::Dedent,
+                Token::Text(1, "\n\n\n"),
+                Token::StartBlock(4),
+                Token::Text(4, "``"),
+                Token::Text(4, " "),
+                Token::Text(4, "use"),
+                Token::Text(4, "\n"),
+                Token::Text(5, "<database>"),
+                Token::RightParen,
             ]
         );
     }
