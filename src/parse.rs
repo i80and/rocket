@@ -167,6 +167,7 @@ struct StateExpression {
 
     quote: Vec<String>,
     in_quote: bool,
+    new_node: bool,
 }
 
 impl StateExpression {
@@ -177,6 +178,7 @@ impl StateExpression {
             lineno,
             quote: vec![],
             in_quote: false,
+            new_node: true,
         }
     }
 }
@@ -204,9 +206,27 @@ impl TokenHandler for StateExpression {
         match *token {
             Token::Text(lineno, s) => {
                 // When in an expression, whitespace only serves to separate tokens.
-                if !PAT_IS_WHITESPACE.is_match(s) {
-                    self.root
-                        .push(Node::new_string(s.to_owned(), self.file_id, lineno));
+                if PAT_IS_WHITESPACE.is_match(s) {
+                    self.new_node = true;
+                } else {
+                    let mut new_node = self.new_node;
+
+                    if !new_node {
+                        if let Some(last) = self.root.last_mut() {
+                            match last.value {
+                                NodeValue::Owned(ref mut val) => val.push_str(s),
+                                NodeValue::Children(_) => new_node = true,
+                            }
+                        } else {
+                            new_node = true;
+                        }
+                    }
+
+                    if new_node {
+                        self.root
+                            .push(Node::new_string(s.to_owned(), self.file_id, lineno));
+                    }
+                    self.new_node = false;
                 }
             }
             Token::Quote(_) => {
