@@ -13,13 +13,13 @@ lazy_static! {
 
 type FileID = u32;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum NodeValue {
     Owned(String),
     Children(Vec<Node>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Node {
     pub value: NodeValue,
     pub file_id: FileID,
@@ -141,7 +141,8 @@ impl TokenHandler for StateRocket {
     fn finish(&mut self) -> Node {
         if !self.buffer.is_empty() {
             let string = self.buffer.concat();
-            self.root.push(Node::new_string(string, self.file_id, -1));
+            self.root
+                .push(Node::new_string(string, self.file_id, self.lineno));
         }
 
         Node::new_children(
@@ -315,6 +316,22 @@ impl Parser {
         }
     }
 
+    fn parse_string(&mut self, id: FileID, data: String) -> Result<Node, String> {
+        let mut stack = ParseContextStack::new(id, 0);
+        for token in lex(&data) {
+            stack.handle(&token);
+        }
+
+        let root = stack.stack.pop().expect("Empty state stack").finish();
+        match stack.stack.pop() {
+            Some(_) => Err(format!(
+                "Unterminated block started on line {}",
+                root.lineno
+            )),
+            None => Ok(root),
+        }
+    }
+
     pub fn parse(&mut self, path: &Path) -> Result<Node, String> {
         debug!("Parsing {}", path.to_string_lossy());
 
@@ -331,18 +348,137 @@ impl Parser {
         file.read_to_string(&mut data)
             .expect("Failed to read input file");
 
-        let mut stack = ParseContextStack::new(id, 0);
-        for token in lex(&data) {
-            stack.handle(&token);
-        }
+        self.parse_string(id, data)
+    }
+}
 
-        let root = stack.stack.pop().expect("Empty state stack").finish();
-        match stack.stack.pop() {
-            Some(_) => Err(format!(
-                "Unterminated block started on line {}",
-                root.lineno
-            )),
-            None => Ok(root),
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rocket(mut args: Vec<Node>, lineno: i32) -> Node {
+        let mut children = vec![Node::new_string("concat", 0, lineno)];
+        for arg in args.drain(..) {
+            children.push(arg);
         }
+        Node::new_children(children, 0, lineno)
+    }
+
+    #[test]
+    fn test_empty() {
+        let mut parser = Parser::new();
+        assert_eq!(parser.parse_string(0, "".to_owned()), Ok(rocket(vec![], 0)));
+    }
+
+    #[test]
+    fn test_complex() {
+        let mut parser = Parser::new();
+        let src = "(:h1 Rocket)
+
+Rocket is a fast and powerful text markup format.
+
+(:h2 (:ref writing-your-first-project \"Getting Started\"))
+(:h2 =>Example)
+(:code txt =>
+    (:():h1 Rocket)
+
+    Rocket is a fast and powerful text markup format.
+
+    (:():h2 (:():ref writing-your-first-project \"Getting Started\"))
+
+\x20\x20\x20\x20
+
+(:toctree
+  \"reference\"
+  \"tutorials\")";
+
+        let h1 = Node::new_children(
+            vec![
+                Node::new_string("h1", 0, 0),
+                Node::new_string("Rocket", 0, 0),
+            ],
+            0,
+            0,
+        );
+        let para1 = Node::new_string(
+            "\n\nRocket is a fast and powerful text markup format.\n\n",
+            0,
+            4,
+        );
+        let h2_1 = Node::new_children(
+            vec![
+                Node::new_string("h2", 0, 4),
+                Node::new_children(
+                    vec![
+                        Node::new_string("ref", 0, 4),
+                        Node::new_string("writing-your-first-project", 0, 4),
+                        Node::new_string("Getting Started", 0, 4),
+                    ],
+                    0,
+                    4,
+                ),
+            ],
+            0,
+            4,
+        );
+        let h2_2 = Node::new_children(
+            vec![
+                Node::new_string("h2", 0, 5),
+                Node::new_string("=>Example", 0, 5),
+            ],
+            0,
+            5,
+        );
+        let code = Node::new_children(
+            vec![
+                Node::new_string("code", 0, 6),
+                Node::new_string("txt", 0, 6),
+                rocket(
+                    vec![
+                        Node::new_children(vec![Node::new_string("(", 0, 7)], 0, 7),
+                        Node::new_string(
+                            ":h1 Rocket)\n\nRocket is a fast and powerful text markup format.\n\n",
+                            0,
+                            11,
+                        ),
+                        Node::new_children(vec![Node::new_string("(", 0, 11)], 0, 11),
+                        Node::new_string(":h2 ", 0, 11),
+                        Node::new_children(vec![Node::new_string("(", 0, 11)], 0, 11),
+                        Node::new_string(
+                            ":ref writing-your-first-project \"Getting Started\"))\n\n",
+                            0,
+                            6,
+                        ),
+                    ],
+                    6,
+                ),
+            ],
+            0,
+            6,
+        );
+        let toctree = Node::new_children(
+            vec![
+                Node::new_string("toctree", 0, 15),
+                Node::new_string("reference", 0, 16),
+                Node::new_string("tutorials", 0, 17),
+            ],
+            0,
+            15,
+        );
+        let result = rocket(
+            vec![
+                h1,
+                para1,
+                h2_1,
+                Node::new_string("\n", 0, 5),
+                h2_2,
+                Node::new_string("\n", 0, 6),
+                code,
+                Node::new_string("\n\n", 0, 15),
+                toctree,
+            ],
+            0,
+        );
+        assert_eq!(parser.parse_string(0, src.to_owned()), Ok(result));
     }
 }
