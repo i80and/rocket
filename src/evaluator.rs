@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::marker::Sync;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use log;
 use serde_json;
@@ -40,6 +40,7 @@ pub enum StoredValue {
 }
 
 pub struct Evaluator {
+    pub root_path: PathBuf,
     prelude_ctx: HashMap<String, Arc<StoredValue>>,
     pub refdefs: RwLock<HashMap<String, RefDef>>,
     pub toctree: RwLock<TocTree>,
@@ -50,7 +51,12 @@ pub struct Evaluator {
 }
 
 impl Evaluator {
+    #[allow(dead_code)]
     pub fn new() -> Self {
+        Self::new_with_options(PathBuf::new())
+    }
+
+    pub fn new_with_options(root_path: PathBuf) -> Self {
         let hex_chars = b"0123456789abcdef";
         let mut rnd_buf = [0u8; 16];
         rand::thread_rng().fill_bytes(&mut rnd_buf);
@@ -65,6 +71,7 @@ impl Evaluator {
             Regex::new(&pattern_text).expect("Failed to compile linker pattern");
 
         Evaluator {
+            root_path,
             prelude_ctx: HashMap::new(),
             refdefs: RwLock::new(HashMap::new()),
             toctree: RwLock::new(TocTree::new(Slug::new("index".to_owned()), true)),
@@ -254,6 +261,21 @@ impl<'a> Worker<'a> {
 
     pub fn close_sections(&self) -> String {
         "</section>".repeat(self.current_level as usize)
+    }
+
+    pub fn get_source_path(&self, node: &Node, path: &str) -> PathBuf {
+        if path.starts_with('/') {
+            self.evaluator
+                .root_path
+                .join(path.trim_left_matches(|c| c == '/'))
+        } else {
+            let prefix = self.parser
+                .get_node_source_path(node)
+                .expect("Node with unknown file ID")
+                .parent()
+                .unwrap_or_else(|| Path::new(""));
+            prefix.join(path)
+        }
     }
 
     pub fn log(&self, node: &Node, message: &str, level: log::LogLevel) {

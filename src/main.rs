@@ -302,7 +302,7 @@ fn build(verbose: bool) {
 
     config.verbose = verbose;
 
-    let mut evaluator = Evaluator::new();
+    let mut evaluator = Evaluator::new_with_options(config.content_dir.to_owned());
     evaluator.register_prelude("code", Box::new(directives::Code));
     evaluator.register_prelude("table", Box::new(directives::Dummy));
     evaluator.register_prelude("version", Box::new(directives::Version::new("3.4.0")));

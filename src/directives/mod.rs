@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 use std::collections::hash_map::Entry;
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::{cmp, iter, mem, slice, str};
 use regex::{Captures, Regex};
@@ -271,17 +270,8 @@ impl DirectiveHandler for Include {
             return Err(());
         }
 
-        let mut path = PathBuf::from(worker.evaluate(&args[0]));
-        if !path.is_absolute() {
-            let prefix = worker
-                .parser
-                .get_node_source_path(&args[0])
-                .expect("Node with unknown file ID")
-                .parent()
-                .unwrap_or_else(|| Path::new(""));
-            path = prefix.join(path.to_owned());
-        }
-
+        let path = worker.evaluate(&args[0]);
+        let path = worker.get_source_path(&args[0], &path);
         let node = match worker.parser.parse(path.as_ref()) {
             Ok(n) => n,
             Err(msg) => {
