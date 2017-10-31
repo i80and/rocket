@@ -133,7 +133,12 @@ impl DirectiveHandler for Admonition {
         };
 
         Ok(format!(
-            "<div class=\"admonition admonition-{}\"><span class=\"admonition-title admonition-title-{}\">{}</span>{}</div>\n",
+            concat!(
+                "<div class=\"admonition admonition-{}\">",
+                "<span class=\"admonition-title admonition-title-{}\">",
+                "{}</span>",
+                "{}</div>\n"
+            ),
             self.class,
             self.class,
             title,
@@ -584,9 +589,11 @@ impl DirectiveHandler for Steps {
                 NodeValue::Children(ref children) => parse_args(children, worker),
             }?;
 
-            result.push(Cow::from(
-                r#"<div class="steps__step"><div class="steps__bullet"><div class="steps__stepnumber">"#,
-            ));
+            result.push(Cow::from(concat!(
+                r#"<div class="steps__step">"#,
+                r#"<div class="steps__bullet">"#,
+                r#"<div class="steps__stepnumber">"#
+            )));
             result.push(Cow::from((i + 1).to_string()));
             result.push(Cow::from(r#"</div></div>"#));
             result.push(Cow::from(
@@ -804,10 +811,21 @@ mod tests {
         );
 
         assert!(handler.handle(&mut worker, &[]).is_err());
-        assert_eq!(handler.handle(&mut worker, &[
-            node_string("SIMD.js Rectangle Intersection"),
-            node_string("/simd-rectangle-intersection/")]),
-                   Ok(r#"[SIMD.js Rectangle Intersection](https://foxquill.com/simd-rectangle-intersection/ "")"#.to_owned()));
+        assert_eq!(
+            handler.handle(
+                &mut worker,
+                &[
+                    node_string("SIMD.js Rectangle Intersection"),
+                    node_string("/simd-rectangle-intersection/")
+                ]
+            ),
+            Ok(
+                concat!(
+                    "[SIMD.js Rectangle Intersection]",
+                    r#"(https://foxquill.com/simd-rectangle-intersection/ "")"#
+                ).to_owned()
+            )
+        );
     }
 
     #[test]

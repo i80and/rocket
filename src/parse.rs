@@ -8,7 +8,8 @@ use regex::Regex;
 use lex::{lex, Token};
 
 lazy_static! {
-    static ref PAT_IS_WHITESPACE: Regex = Regex::new(r#"^\s+$"#).expect("Failed to compile whitespace regex");
+    static ref PAT_IS_WHITESPACE: Regex =
+        Regex::new(r#"^\s+$"#).expect("Failed to compile whitespace regex");
 }
 
 type FileID = u32;

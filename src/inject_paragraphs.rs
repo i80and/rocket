@@ -3,7 +3,9 @@ use regex::Regex;
 
 lazy_static! {
     static ref PAT_PARAGRAPHS: Regex = Regex::new(r#"(?xm)
-          (?:\n\n) | (?:</?[a-z0-9]+) | (?:[^\n<]+) | \n"#).expect("Failed to compile paragraph regex");
+            (?:\n\n)
+          | (?:</?[a-z0-9]+)
+          | (?:[^\n<]+) | \n"#).expect("Failed to compile paragraph regex");
     static ref BLOCK_TAGS: HashSet<&'static [u8]> = vec![
          b"address".as_ref(),
          b"article".as_ref(),
@@ -110,7 +112,7 @@ Example ref: <a href="tutorials/writing-your-first-project">Writing Your First P
 
 </section><h2 id="back-up-to-level-2">Back Up to Level 2</h2>
 
-<div class="steps"><div class="steps__step"><div class="steps__bullet"><div class="steps__stepnumber">3</div></div><h4>Third Step</h4><div>Lorem ipsum
+<div class="steps"><h4>Third Step</h4><div>Lorem ipsum
 
 Sed facilisis
 </div></div></div>
@@ -138,7 +140,7 @@ Sed facilisis
 
 </section><h2 id="back-up-to-level-2">Back Up to Level 2</h2>
 
-<div class="steps"><div class="steps__step"><div class="steps__bullet"><div class="steps__stepnumber">3</div></div><h4>Third Step</h4><div>Lorem ipsum
+<div class="steps"><h4>Third Step</h4><div>Lorem ipsum
 
 <p>Sed facilisis
 </div></div></div>
