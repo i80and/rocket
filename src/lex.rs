@@ -5,7 +5,7 @@ lazy_static! {
     static ref PAT_TOKENS: Regex = Regex::new(r#"(?xm)
           (?:\(:)
         | (?:=>\n\x20+)
-        | (?:\n\x20+)
+        | (?:\n+\x20+)
         | "
         | =
         | \(
@@ -116,8 +116,8 @@ mod tests {
     fn test_rocket() {
         assert_eq!(
             lex(
-                r#"
-(:note "a title" =>
+                "
+(:note \"a title\" =>
   stuff  1
 
   stuff 2
@@ -129,7 +129,9 @@ mod tests {
 
   closing nested
 
-(:h2 foo)"#
+\x20\x20
+
+(:h2 foo)"
             ),
             vec![
                 Token::Text(0, "\n"),
@@ -168,12 +170,13 @@ mod tests {
                 Token::Text(11, "closing"),
                 Token::Text(11, " "),
                 Token::Text(11, "nested"),
-                Token::Dedent,
                 Token::Text(11, "\n\n"),
-                Token::StartBlock(13),
-                Token::Text(13, "h2"),
-                Token::Text(13, " "),
-                Token::Text(13, "foo"),
+                Token::Dedent,
+                Token::Text(13, "\n\n"),
+                Token::StartBlock(15),
+                Token::Text(15, "h2"),
+                Token::Text(15, " "),
+                Token::Text(15, "foo"),
                 Token::RightParen,
             ]
         );
