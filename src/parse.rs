@@ -167,7 +167,8 @@ struct StateExpression {
     file_id: FileID,
     lineno: i32,
 
-    quote: Vec<String>,
+    quote: String,
+    quote_should_merge: bool,
     in_quote: bool,
     new_node: bool,
 }
@@ -178,7 +179,8 @@ impl StateExpression {
             root: vec![],
             file_id,
             lineno,
-            quote: vec![],
+            quote: String::new(),
+            quote_should_merge: false,
             in_quote: false,
             new_node: true,
         }
@@ -189,17 +191,39 @@ impl TokenHandler for StateExpression {
     fn handle_token(&mut self, token: &Token) -> StackRequest {
         if self.in_quote {
             match *token {
-                Token::Text(_, s) => self.quote.push(s.to_owned()),
+                Token::Text(_, s) => self.quote.push_str(s),
                 Token::Quote(lineno) => {
-                    self.root
-                        .push(Node::new_string(self.quote.concat(), self.file_id, lineno));
+                    let should_add_node = if self.quote_should_merge {
+                        if let Some(node) = self.root.last_mut() {
+                            match node.value {
+                                NodeValue::Owned(ref mut s) => {
+                                    s.push_str(&self.quote);
+                                    false
+                                }
+                                _ => true,
+                            }
+                        } else {
+                            true
+                        }
+                    } else {
+                        true
+                    };
 
+                    if should_add_node {
+                        self.root.push(Node::new_string(
+                            self.quote.to_owned(),
+                            self.file_id,
+                            lineno,
+                        ));
+                    }
+
+                    self.quote_should_merge = false;
                     self.in_quote = false;
                     self.quote.clear();
                 }
-                Token::StartBlock(_) => self.quote.push("(:".to_owned()),
-                Token::RightParen => self.quote.push(")".to_owned()),
-                Token::Rocket(_) => self.quote.push("=>".to_owned()),
+                Token::StartBlock(_) => self.quote.push_str("(:"),
+                Token::RightParen => self.quote.push(')'),
+                Token::Rocket(_) => self.quote.push_str("=>"),
                 Token::Dedent => (),
             }
             return StackRequest::None;
@@ -210,7 +234,9 @@ impl TokenHandler for StateExpression {
                 // When in an expression, whitespace only serves to separate tokens.
                 if PAT_IS_WHITESPACE.is_match(s) {
                     self.new_node = true;
+                    self.quote_should_merge = false;
                 } else {
+                    self.quote_should_merge = true;
                     let mut new_node = self.new_node;
 
                     if !new_node {
@@ -231,9 +257,7 @@ impl TokenHandler for StateExpression {
                     self.new_node = false;
                 }
             }
-            Token::Quote(_) => {
-                self.in_quote = true;
-            }
+            Token::Quote(_) => self.in_quote = true,
             Token::StartBlock(lineno) => {
                 return StackRequest::Push(Box::new(StateExpression::new(self.file_id, lineno)));
             }
@@ -261,7 +285,11 @@ impl TokenHandler for StateExpression {
     }
 
     fn name(&self) -> &'static str {
-        "expression"
+        if self.in_quote {
+            "expression-quote"
+        } else {
+            "expression"
+        }
     }
 }
 
@@ -369,6 +397,39 @@ mod tests {
     fn test_empty() {
         let mut parser = Parser::new();
         assert_eq!(parser.parse_string(0, "".to_owned()), Ok(rocket(vec![], 0)));
+    }
+
+    #[test]
+    fn test_word_with_quotes() {
+        let mut parser = Parser::new();
+
+        assert!(
+            parser
+                .parse_string(
+                    0,
+                    r#"(:`` ")
+(:h3 =>
+  "Sally")"#.to_owned()
+                )
+                .is_err()
+        );
+
+        assert_eq!(
+            parser.parse_string(0, r#"(:`` f"oo ba"r)"#.to_owned()),
+            Ok(rocket(
+                vec![
+                    Node::new_children(
+                        vec![
+                            Node::new_string("``", 0, 0),
+                            Node::new_string("foo bar", 0, 0),
+                        ],
+                        0,
+                        0,
+                    ),
+                ],
+                0
+            ))
+        );
     }
 
     #[test]
