@@ -415,8 +415,9 @@ fn main() {
                 "-h" | "--help" => help(0),
                 "-V" | "--version" => {
                     println!(
-                        "{}",
-                        option_env!("CARGO_PKG_VERSION").unwrap_or("<unknown>")
+                        "{}-{}",
+                        option_env!("CARGO_PKG_VERSION").unwrap_or("<unknown>"),
+                        env!("GIT_HASH"),
                     );
                     return;
                 }
