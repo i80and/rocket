@@ -84,7 +84,11 @@ but does not insert the file's contents into the document.
 
 (:h2 (:`` steps))
 (:code txt =>
-    (:():steps <language> <code>)
+    (:():steps (:<title> <body>))
+
+(:h2 (:`` glossary))
+(:code txt =>
+    (:():glossary (:<term> <definition>))
 
 (:h2 (:`` theme-config))
 (:code txt =>

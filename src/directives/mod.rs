@@ -9,6 +9,7 @@ use page::Slug;
 use evaluator::{PlaceholderAction, RefDef, StoredValue, Worker};
 
 pub mod logic;
+pub mod glossary;
 
 fn consume_string(iter: &mut slice::Iter<Node>, worker: &mut Worker) -> Option<String> {
     match iter.next() {
@@ -20,7 +21,7 @@ fn consume_string(iter: &mut slice::Iter<Node>, worker: &mut Worker) -> Option<S
     }
 }
 
-fn escape_string(s: &str) -> String {
+pub fn escape_string(s: &str) -> String {
     let mut result = String::with_capacity(s.len());
     for ch in s.chars() {
         match ch {
@@ -36,7 +37,11 @@ fn escape_string(s: &str) -> String {
     result
 }
 
-fn concat_nodes(iter: &mut slice::Iter<Node>, worker: &mut Worker, sep: &'static str) -> String {
+pub fn concat_nodes(
+    iter: &mut slice::Iter<Node>,
+    worker: &mut Worker,
+    sep: &'static str,
+) -> String {
     iter.map(|node| worker.evaluate(node))
         .fold(String::new(), |r, c| if r.is_empty() {
             c

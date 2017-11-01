@@ -45,7 +45,7 @@ use evaluator::{Evaluator, Worker};
 use inject_paragraphs::inject_paragraphs;
 use page::{Page, Slug};
 use toctree::TocTree;
-use directives::logic;
+use directives::{glossary, logic};
 use scoped_threadpool::Pool;
 
 #[derive(Debug)]
@@ -316,7 +316,6 @@ fn build(verbose: bool) {
     );
     evaluator.register_prelude("define-template", Box::new(directives::DefineTemplate));
     evaluator.register_prelude("definition-list", Box::new(directives::DefinitionList));
-    evaluator.register_prelude("steps", Box::new(directives::Steps));
     evaluator.register_prelude("concat", Box::new(directives::Concat));
     evaluator.register_prelude("include", Box::new(directives::Include));
     evaluator.register_prelude("import", Box::new(directives::Import));
@@ -331,6 +330,10 @@ fn build(verbose: bool) {
     evaluator.register_prelude("figure", Box::new(directives::Figure));
     evaluator.register_prelude("ul", Box::new(directives::List::new("ul")));
     evaluator.register_prelude("ol", Box::new(directives::List::new("ol")));
+
+    // Structural
+    evaluator.register_prelude("glossary", Box::new(glossary::Glossary));
+    evaluator.register_prelude("steps", Box::new(directives::Steps));
 
     // Formatting
     evaluator.register_prelude("``", Box::new(directives::FormattingMarker::new("code")));
