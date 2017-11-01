@@ -363,10 +363,10 @@ fn build(verbose: bool) {
     );
 }
 
-const DESCRIPTION_BUILD: &'static str =
+const DESCRIPTION_BUILD: &str =
     "Build the Rocket project in the current working directory.";
-const DESCRIPTION_NEW: &'static str = "Create an empty Rocket project.";
-const HELP_VERBOSE: &'static str = "Increase logging verbosity.";
+const DESCRIPTION_NEW: &str = "Create an empty Rocket project.";
+const HELP_VERBOSE: &str = "Increase logging verbosity.";
 
 enum ArgMode {
     Root,
