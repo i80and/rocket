@@ -1000,19 +1000,19 @@ mod tests {
             let handler = Heading::new(2);
             assert_eq!(
                 handler.handle(&mut worker, &[node_string("A Second Title")]),
-                Ok(r#"<section><h2 id="a-second-title">A Second Title</h2>"#.to_owned())
+                Ok(r#"<section><h2 id="ref-a-second-title">A Second Title</h2>"#.to_owned())
             );
 
             let handler = Heading::new(3);
             assert_eq!(
                 handler.handle(&mut worker, &[node_string("A Third Title")]),
-                Ok(r#"<section><h3 id="a-third-title">A Third Title</h3>"#.to_owned())
+                Ok(r#"<section><h3 id="ref-a-third-title">A Third Title</h3>"#.to_owned())
             );
 
             let handler = Heading::new(1);
             assert_eq!(
                 handler.handle(&mut worker, &[node_string("A Fourth Title")]),
-                Ok(r#"</section></section><h1 id="a-fourth-title">A Fourth Title</h1>"#.to_owned())
+                Ok(r#"</section></section><h1 id="ref-a-fourth-title">A Fourth Title</h1>"#.to_owned())
             );
 
             assert_eq!(worker.close_sections(), "</section>".to_owned());
@@ -1023,7 +1023,7 @@ mod tests {
                 .refdefs
                 .read()
                 .unwrap()
-                .get("a-title")
+                .get("ref-a-title")
                 .unwrap()
                 .title,
             "A Title".to_owned()
@@ -1036,12 +1036,12 @@ mod tests {
         {
             let mut worker = Worker::new(&mut evaluator);
             worker.set_slug(Slug::new("index".to_owned()));
-            let handler = RefDefDirective;
+            let handler = RefDefDirective::new("ref");
 
             assert!(handler.handle(&mut worker, &[]).is_err());
             assert!(
                 handler
-                    .handle(&mut worker, &[node_string("a-title")])
+                    .handle(&mut worker, &[node_string("ref-a-title")])
                     .is_err()
             );
             assert_eq!(
@@ -1058,7 +1058,7 @@ mod tests {
                 .refdefs
                 .read()
                 .unwrap()
-                .get("a-title")
+                .get("ref-a-title")
                 .unwrap()
                 .title,
             "A Title".to_owned()
