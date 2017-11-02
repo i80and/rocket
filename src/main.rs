@@ -324,8 +324,10 @@ fn build(verbose: bool) {
     evaluator.register_prelude("define", Box::new(directives::Define));
     evaluator.register_prelude("theme-config", Box::new(directives::ThemeConfig));
     evaluator.register_prelude("toctree", Box::new(directives::TocTree));
-    evaluator.register_prelude("define-ref", Box::new(directives::RefDefDirective));
-    evaluator.register_prelude("ref", Box::new(directives::RefDirective));
+    evaluator.register_prelude("define-ref", Box::new(directives::RefDefDirective::new("ref")));
+    evaluator.register_prelude("ref", Box::new(directives::RefDirective::new("ref")));
+    evaluator.register_prelude("define-program", Box::new(directives::RefDefDirective::new("program")));
+    evaluator.register_prelude("program", Box::new(directives::RefDirective::new("program")));
     evaluator.register_prelude("link", Box::new(directives::Link));
     evaluator.register_prelude("figure", Box::new(directives::Figure));
     evaluator.register_prelude("ul", Box::new(directives::List::new("ul")));

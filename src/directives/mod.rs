@@ -453,11 +453,14 @@ impl DirectiveHandler for TocTree {
 
 pub struct Heading {
     level: i8,
+    prefix : String,
 }
 
 impl Heading {
     pub fn new(level: i8) -> Self {
-        Heading { level }
+        let prefix = String::from("ref-");
+
+        Heading {level, prefix}
     }
 
     fn title_to_id(title: &str) -> String {
@@ -488,11 +491,11 @@ impl DirectiveHandler for Heading {
         let (title, refdef) = match arg2 {
             Some(title) => {
                 let refdef = RefDef::new(&title, worker.get_slug());
-                worker.insert_refdef(arg1.to_owned(), refdef);
+                worker.insert_refdef(format!("{}{}", self.prefix, arg1), refdef);
                 (title, arg1)
             }
             None => {
-                let title_id = Self::title_to_id(&arg1);
+                let title_id = format!("{}{}", self.prefix, Self::title_to_id(&arg1));
                 (arg1, title_id)
             }
         };
@@ -517,12 +520,24 @@ impl DirectiveHandler for Heading {
     }
 }
 
-pub struct RefDefDirective;
+pub struct RefDefDirective{
+    prefix : String,
+}
+
+impl RefDefDirective {
+
+    pub fn new(pre: &str) -> Self {
+        
+        let prefix = format!("{}-", pre);
+
+        RefDefDirective{ prefix }
+    }
+}
 
 impl DirectiveHandler for RefDefDirective {
     fn handle(&self, worker: &mut Worker, args: &[Node]) -> Result<String, ()> {
         let mut iter = args.iter();
-        let id = consume_string(&mut iter, worker).ok_or(())?;
+        let id = format!("{}{}", self.prefix, consume_string(&mut iter, worker).ok_or(())?);
         let title = consume_string(&mut iter, worker).ok_or(())?;
 
         let refdef = RefDef::new(&title, worker.get_slug());
@@ -532,12 +547,23 @@ impl DirectiveHandler for RefDefDirective {
     }
 }
 
-pub struct RefDirective;
+pub struct RefDirective{
+    prefix : String,
+}
+
+impl RefDirective {
+    pub fn new (pre: &str) -> Self {
+        let pref = format!("{}-", pre);
+
+        RefDirective { prefix : pref.to_owned() }
+
+    }
+}
 
 impl DirectiveHandler for RefDirective {
     fn handle(&self, worker: &mut Worker, args: &[Node]) -> Result<String, ()> {
         let mut iter = args.iter();
-        let refid = consume_string(&mut iter, worker).ok_or(())?;
+        let refid = format!("{}{}", self.prefix, consume_string(&mut iter, worker).ok_or(())?);
 
         let title = match consume_string(&mut iter, worker) {
             Some(t) => t,
@@ -974,19 +1000,19 @@ mod tests {
             let handler = Heading::new(2);
             assert_eq!(
                 handler.handle(&mut worker, &[node_string("A Second Title")]),
-                Ok(r#"<section><h2 id="a-second-title">A Second Title</h2>"#.to_owned())
+                Ok(r#"<section><h2 id="ref-a-second-title">A Second Title</h2>"#.to_owned())
             );
 
             let handler = Heading::new(3);
             assert_eq!(
                 handler.handle(&mut worker, &[node_string("A Third Title")]),
-                Ok(r#"<section><h3 id="a-third-title">A Third Title</h3>"#.to_owned())
+                Ok(r#"<section><h3 id="ref-a-third-title">A Third Title</h3>"#.to_owned())
             );
 
             let handler = Heading::new(1);
             assert_eq!(
                 handler.handle(&mut worker, &[node_string("A Fourth Title")]),
-                Ok(r#"</section></section><h1 id="a-fourth-title">A Fourth Title</h1>"#.to_owned())
+                Ok(r#"</section></section><h1 id="ref-a-fourth-title">A Fourth Title</h1>"#.to_owned())
             );
 
             assert_eq!(worker.close_sections(), "</section>".to_owned());
@@ -997,7 +1023,7 @@ mod tests {
                 .refdefs
                 .read()
                 .unwrap()
-                .get("a-title")
+                .get("ref-a-title")
                 .unwrap()
                 .title,
             "A Title".to_owned()
@@ -1010,12 +1036,12 @@ mod tests {
         {
             let mut worker = Worker::new(&mut evaluator);
             worker.set_slug(Slug::new("index".to_owned()));
-            let handler = RefDefDirective;
+            let handler = RefDefDirective::new("ref");
 
             assert!(handler.handle(&mut worker, &[]).is_err());
             assert!(
                 handler
-                    .handle(&mut worker, &[node_string("a-title")])
+                    .handle(&mut worker, &[node_string("ref-a-title")])
                     .is_err()
             );
             assert_eq!(
@@ -1032,7 +1058,7 @@ mod tests {
                 .refdefs
                 .read()
                 .unwrap()
-                .get("a-title")
+                .get("ref-a-title")
                 .unwrap()
                 .title,
             "A Title".to_owned()
