@@ -1,14 +1,14 @@
-(:h1 writing-your-first-project "Writing Your First Project")
+(:h1 writing-your-first-project "Writing Your First Project":)
 
 (:steps
-    (:step (:ref installing-rocket "Install Rocket") "")
+    (:step (:ref installing-rocket "Install Rocket":) "":)
 
     (:step "Create an Empty Project" =>
         (:code sh =>
             rocket new <projname>
 
     (:step "Set your Project's Name" =>
-        Edit (:`` config.toml), and update the (:`` theme_constants.title) key.
+        Edit (:`` config.toml:), and update the (:`` theme_constants.title:) key.
 
         For example:
         (:code txt =>
@@ -16,10 +16,10 @@
             title = "My Documentation Project"
 
     (:step "Create your Project Index" =>
-        Create a new file called (:`` content/index.rocket). This page
+        Create a new file called (:`` content/index.rocket:). This page
         will be your project's landing page, and is the root of the
         page hierarchy.
-)
+:)
 
-See (:link https://github.com/i80and/rocket/tree/master/doc) to view the
+See (:link https://github.com/i80and/rocket/tree/master/doc:) to view the
 source of this documentation.

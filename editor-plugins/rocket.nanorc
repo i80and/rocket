@@ -4,10 +4,10 @@ syntax "Rocket" "\.rocket$"
 color yellow "\"(\\.|[^"])*\""
 
 # S-expression start
-color brightblue "\(:[a-z-]+|\(:\"[^\"]+\""
+color brightblue "\(:+[a-z_`*-]+|\(:\"[^\"]+\""
 
 # End S-expression
-color brightblue "\)"
+color brightblue ":+\)"
 
 ## Trailing spaces
 color ,green "[[:space:]]+$"

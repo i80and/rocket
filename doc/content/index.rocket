@@ -1,19 +1,19 @@
-(:h1 Rocket)
+(:h1 Rocket:)
 
 Rocket is a fast and powerful text markup format.
 
-(:h2 (:ref writing-your-first-project "Getting Started"))
-(:h2 Example)
-(:define evaluate "(" "(")
-(:code txt =>
-    (:():h1 Rocket)
+(:h2 (:ref writing-your-first-project "Getting Started":):)
+(:h2 Example:)
+(:define evaluate "(" "(":)
+(::code txt =>
+    (:h1 Rocket:)
 
     Rocket is a fast and powerful text markup format.
 
-    (:():h2 (:():ref writing-your-first-project "Getting Started"))
+    (:h2 (:ref writing-your-first-project "Getting Started":):)
 
-    (:():toctree "reference" "tutorials")
+    (:toctree "reference" "tutorials":)
 
 (:toctree
   "reference"
-  "tutorials")
+  "tutorials":)

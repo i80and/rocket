@@ -365,8 +365,7 @@ fn build(verbose: bool) {
     );
 }
 
-const DESCRIPTION_BUILD: &str =
-    "Build the Rocket project in the current working directory.";
+const DESCRIPTION_BUILD: &str = "Build the Rocket project in the current working directory.";
 const DESCRIPTION_NEW: &str = "Create an empty Rocket project.";
 const HELP_VERBOSE: &str = "Increase logging verbosity.";
 

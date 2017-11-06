@@ -1,23 +1,27 @@
+use std::cmp;
 use bytecount::naive_count_32;
 use regex::Regex;
 
 lazy_static! {
     static ref PAT_TOKENS: Regex = Regex::new(r#"(?xm)
-          (?:\(:)
+          (?:\(:+)
+        | (?::+\))
         | (?:=>\n\x20+)
         | (?:\n+\x20+)
         | "
         | =
-        | \(
-        | \)
         | \s+
-        | [^\(\)=\s"]+"#).expect("Failed to compile lexer regex");
+        | [^\(\):=\s"]+"#).expect("Failed to compile lexer regex");
+}
+
+fn usize_to_u8(val: usize) -> u8 {
+    cmp::min(val, u8::max_value() as usize) as u8
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Token<'a> {
-    StartBlock(i32),
-    RightParen,
+    StartBlock(i32, u8),
+    RightParen(u8),
     Rocket(i32),
     Dedent,
     Text(i32, &'a str),
@@ -38,9 +42,11 @@ pub fn lex(data: &str) -> Vec<Token> {
         let bytes = token_text.as_bytes();
 
         let token = match bytes[0] {
-            b')' => Token::RightParen,
             b'"' => Token::Quote(lineno),
-            _ if bytes == b"(:" => Token::StartBlock(lineno),
+            _ if bytes.starts_with(b"(:") => {
+                Token::StartBlock(lineno, usize_to_u8(bytes.len() - 2))
+            }
+            _ if bytes.starts_with(b":)") => Token::RightParen(usize_to_u8(bytes.len() - 2)),
             _ if bytes.starts_with(b"=>\n") => {
                 indent.push(bytes.len() - 3);
                 Token::Rocket(lineno)
@@ -79,6 +85,12 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_usize_to_u8() {
+        assert_eq!(usize_to_u8(0), 0);
+        assert_eq!(usize_to_u8(256), 255);
+    }
+
+    #[test]
     fn test_empty() {
         assert_eq!(lex(""), vec![]);
     }
@@ -86,14 +98,14 @@ mod tests {
     #[test]
     fn test_expression() {
         assert_eq!(
-            lex(r#"(:foo bar (:a "b c") "baz" )"#),
+            lex(r#"(:foo bar (:a "b c":) "baz" :)"#),
             vec![
-                Token::StartBlock(0),
+                Token::StartBlock(0, 0),
                 Token::Text(0, "foo"),
                 Token::Text(0, " "),
                 Token::Text(0, "bar"),
                 Token::Text(0, " "),
-                Token::StartBlock(0),
+                Token::StartBlock(0, 0),
                 Token::Text(0, "a"),
                 Token::Text(0, " "),
                 Token::Quote(0),
@@ -101,13 +113,13 @@ mod tests {
                 Token::Text(0, " "),
                 Token::Text(0, "c"),
                 Token::Quote(0),
-                Token::RightParen,
+                Token::RightParen(0),
                 Token::Text(0, " "),
                 Token::Quote(0),
                 Token::Text(0, "baz"),
                 Token::Quote(0),
                 Token::Text(0, " "),
-                Token::RightParen,
+                Token::RightParen(0),
             ]
         );
     }
@@ -122,7 +134,7 @@ mod tests {
 
   stuff 2
 
-  (:note =>
+  (::note =>
     more stuff
 
     second =>paragraph
@@ -131,11 +143,11 @@ mod tests {
 
 \x20\x20
 
-(:h2 foo)"
+(:h2 foo:)"
             ),
             vec![
                 Token::Text(0, "\n"),
-                Token::StartBlock(1),
+                Token::StartBlock(1, 0),
                 Token::Text(1, "note"),
                 Token::Text(1, " "),
                 Token::Quote(1),
@@ -153,7 +165,7 @@ mod tests {
                 Token::Text(4, " "),
                 Token::Text(4, "2"),
                 Token::Text(4, "\n\n"),
-                Token::StartBlock(6),
+                Token::StartBlock(6, 1),
                 Token::Text(6, "note"),
                 Token::Text(6, " "),
                 Token::Rocket(6),
@@ -173,11 +185,11 @@ mod tests {
                 Token::Text(11, "\n\n"),
                 Token::Dedent,
                 Token::Text(13, "\n\n"),
-                Token::StartBlock(15),
+                Token::StartBlock(15, 0),
                 Token::Text(15, "h2"),
                 Token::Text(15, " "),
                 Token::Text(15, "foo"),
-                Token::RightParen,
+                Token::RightParen(0),
             ]
         );
     }
@@ -192,7 +204,7 @@ mod tests {
     stuff"#.trim()
             ),
             vec![
-                Token::StartBlock(0),
+                Token::StartBlock(0, 0),
                 Token::Text(0, "note"),
                 Token::Text(0, " "),
                 Token::Rocket(0),
@@ -214,24 +226,24 @@ mod tests {
 
 
 (:`` use
-<database>)"
+<database>:)"
                     .trim()
             ),
             vec![
-                Token::StartBlock(0),
+                Token::StartBlock(0, 0),
                 Token::Text(0, "h2"),
                 Token::Text(0, " "),
                 Token::Rocket(0),
                 Token::Text(1, "Example"),
                 Token::Dedent,
                 Token::Text(1, "\n\n\n"),
-                Token::StartBlock(4),
+                Token::StartBlock(4, 0),
                 Token::Text(4, "``"),
                 Token::Text(4, " "),
                 Token::Text(4, "use"),
                 Token::Text(4, "\n"),
                 Token::Text(5, "<database>"),
-                Token::RightParen,
+                Token::RightParen(0),
             ]
         );
     }

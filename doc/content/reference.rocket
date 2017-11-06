@@ -1,12 +1,12 @@
-(:h1 Reference)
+(:h1 Reference:)
 
-(:h2 Syntax)
-(:ref syntax-reference) describes the Rocket syntax in detail.
+(:h2 Syntax:)
+(:ref syntax-reference:) describes the Rocket syntax in detail.
 
-(:h2 Directives)
-(:ref directives-reference) describes all of the available Rocket
+(:h2 Directives:)
+(:ref directives-reference:) describes all of the available Rocket
 directives.
 
 (:toctree
   "reference/syntax"
-  "reference/directives")
+  "reference/directives":)

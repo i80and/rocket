@@ -5,7 +5,7 @@ file_extensions: [rocket]
 scope: source.example-c
 contexts:
   main:
-    - match: '\(:\S+'
+    - match: '\(:+\S+'
       scope: keyword.control.example-c
       push: expression
 
@@ -22,7 +22,7 @@ contexts:
       scope: punctuation.definition.string.begin.rocket
       push: double_quoted_string
 
-    - match: '\)'
+    - match: ':+\)'
       scope: keyword.control.rocket
       pop: true
 
@@ -30,6 +30,6 @@ contexts:
       scope: keyword.control.rocket
       pop: true
 
-    - match: '\(:\S+'
+    - match: '\(::\S+'
       scope: keyword.control.example-c
       push: expression
