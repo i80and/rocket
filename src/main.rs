@@ -280,7 +280,7 @@ fn build_project(project: Project, evaluator: Evaluator) {
     debug!("Linking with {} workers", num_cpus);
 
     let mut pool = Pool::new(num_cpus as u32);
-    pool.scoped(move |scoped| {
+    pool.scoped(|scoped| {
         let mut pending_pages = pending_pages.lock().unwrap();
         for page in pending_pages.drain(0..) {
             let project = Arc::clone(&project);
@@ -294,6 +294,12 @@ fn build_project(project: Project, evaluator: Evaluator) {
             });
         }
     });
+
+    let n_errors = evaluator.get_num_errors();
+    if n_errors > 0 {
+        info!("{} errors", n_errors);
+        process::exit(1);
+    }
 }
 
 fn build(verbose: bool) {

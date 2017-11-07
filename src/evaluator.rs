@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::marker::Sync;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
+use std::sync::{atomic, Arc, RwLock};
 use log;
 use serde_json;
 use rand;
@@ -48,6 +48,8 @@ pub struct Evaluator {
     placeholder_pattern: Regex,
     placeholder_prefix: String,
     pub pending_links: RwLock<Vec<(PlaceholderAction, String)>>,
+
+    errors: atomic::AtomicUsize,
 }
 
 impl Evaluator {
@@ -79,7 +81,12 @@ impl Evaluator {
             placeholder_pattern,
             placeholder_prefix,
             pending_links: RwLock::new(vec![]),
+            errors: atomic::AtomicUsize::new(0),
         }
+    }
+
+    pub fn get_num_errors(&self) -> usize {
+        self.errors.load(atomic::Ordering::Relaxed)
     }
 
     pub fn register_prelude<S: Into<String>>(
@@ -300,5 +307,6 @@ impl<'a> Worker<'a> {
 
     pub fn error(&self, node: &Node, message: &str) {
         self.log(node, message, log::LogLevel::Error);
+        self.evaluator.errors.fetch_add(1, atomic::Ordering::Relaxed);
     }
 }
