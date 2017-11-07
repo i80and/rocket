@@ -502,6 +502,7 @@ Rocket is a fast and powerful text markup format.
 (:h2 (:ref writing-your-first-project \"Getting Started\":):)
 (:h2 =>Example:)
 (::code txt =>
+
     (:h1 Rocket:)
 
     Rocket is a fast and powerful text markup format.
@@ -559,8 +560,8 @@ Rocket is a fast and powerful text markup format.
                     vec![
                         Node::new_string(
                             concat!(
-                                "(:h1 Rocket:)\n\n",
-                                "Rocket is a fast and powerful text markup format.\n\n",
+                                "(:h1 Rocket:)",
+                                "\n\nRocket is a fast and powerful text markup format.\n\n",
                                 "(:h2 (:ref writing-your-first-project \"Getting Started\":):)\n\n"
                             ),
                             0,
@@ -575,12 +576,12 @@ Rocket is a fast and powerful text markup format.
         );
         let toctree = Node::new_children(
             vec![
-                Node::new_string("toctree", 0, 15),
-                Node::new_string("reference", 0, 16),
-                Node::new_string("tutorials", 0, 17),
+                Node::new_string("toctree", 0, 16),
+                Node::new_string("reference", 0, 17),
+                Node::new_string("tutorials", 0, 18),
             ],
             0,
-            15,
+            16,
         );
         let result = rocket(
             vec![
@@ -591,7 +592,7 @@ Rocket is a fast and powerful text markup format.
                 h2_2,
                 Node::new_string("\n", 0, 6),
                 code,
-                Node::new_string("\n\n", 0, 15),
+                Node::new_string("\n\n", 0, 16),
                 toctree,
             ],
             0,

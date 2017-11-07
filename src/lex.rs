@@ -6,7 +6,7 @@ lazy_static! {
     static ref PAT_TOKENS: Regex = Regex::new(r#"(?xm)
           (?:\(:+)
         | (?::+\))
-        | (?:=>\n\x20+)
+        | (?:=>\n+\x20+)
         | (?:\n+\x20+)
         | "
         | =
@@ -48,7 +48,7 @@ pub fn lex(data: &str) -> Vec<Token> {
             }
             _ if bytes.starts_with(b":)") => Token::RightParen(usize_to_u8(bytes.len() - 2)),
             _ if bytes.starts_with(b"=>\n") => {
-                indent.push(bytes.len() - 3);
+                indent.push(naive_count_32(bytes, b' '));
                 Token::Rocket(lineno)
             }
             _ if bytes.starts_with(b"\n") => {
