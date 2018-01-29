@@ -405,9 +405,9 @@ impl Parser {
         }
     }
 
-    fn parse_string(&mut self, id: FileID, data: String) -> Result<Node, String> {
+    fn parse_string(&mut self, id: FileID, data: &str) -> Result<Node, String> {
         let mut stack = ParseContextStack::new(id, 0);
-        for token in lex(&data) {
+        for token in lex(data) {
             stack.handle(&token);
         }
 
@@ -437,7 +437,7 @@ impl Parser {
         file.read_to_string(&mut data)
             .expect("Failed to read input file");
 
-        self.parse_string(id, data)
+        self.parse_string(id, &data)
     }
 }
 
@@ -456,7 +456,7 @@ mod tests {
     #[test]
     fn test_empty() {
         let mut parser = Parser::new();
-        assert_eq!(parser.parse_string(0, "".to_owned()), Ok(rocket(vec![], 0)));
+        assert_eq!(parser.parse_string(0, ""), Ok(rocket(vec![], 0)));
     }
 
     #[test]
@@ -469,13 +469,10 @@ mod tests {
                     0,
                     r#"(:`` ":)
 (:h3 =>
-  "Sally":)"#.to_owned()
-                )
-                .is_err()
-        );
+  "Sally":)"#).is_err());
 
         assert_eq!(
-            parser.parse_string(0, r#"(:`` f"oo ba"r:)"#.to_owned()),
+            parser.parse_string(0, r#"(:`` f"oo ba"r:)"#),
             Ok(rocket(
                 vec![
                     Node::new_children(
@@ -597,7 +594,7 @@ Rocket is a fast and powerful text markup format.
             ],
             0,
         );
-        assert_eq!(parser.parse_string(0, src.to_owned()), Ok(result));
+        assert_eq!(parser.parse_string(0, src), Ok(result));
     }
 
     #[test]
@@ -605,7 +602,7 @@ Rocket is a fast and powerful text markup format.
         let mut parser = Parser::new();
         assert!(
             parser
-                .parse_string(0, r#"(:foo (:bar:)"#.to_owned())
+                .parse_string(0, r#"(:foo (:bar:)"#)
                 .is_err()
         );
     }

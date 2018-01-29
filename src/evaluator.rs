@@ -285,7 +285,7 @@ impl<'a> Worker<'a> {
         }
     }
 
-    pub fn log(&self, node: &Node, message: &str, level: log::LogLevel) {
+    pub fn log(&self, node: &Node, message: &str, level: log::Level) {
         let file_path = self.parser.get_node_source_path(node);
         log!(
             level,
@@ -302,11 +302,11 @@ impl<'a> Worker<'a> {
 
     #[allow(dead_code)]
     pub fn warn(&self, node: &Node, message: &str) {
-        self.log(node, message, log::LogLevel::Warn);
+        self.log(node, message, log::Level::Warn);
     }
 
     pub fn error(&self, node: &Node, message: &str) {
-        self.log(node, message, log::LogLevel::Error);
+        self.log(node, message, log::Level::Error);
         self.evaluator.errors.fetch_add(1, atomic::Ordering::Relaxed);
     }
 }

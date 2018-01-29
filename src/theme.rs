@@ -96,7 +96,7 @@ pub struct Renderer {
 impl Renderer {
     pub fn new(
         theme: Theme,
-        toctree: Arc<TocTree>,
+        toctree: &Arc<TocTree>,
     ) -> Result<Renderer, handlebars::TemplateFileError> {
         let mut handlebars = Handlebars::new();
         let theme_dir_path = theme.path.parent().unwrap_or_else(|| Path::new(""));
@@ -107,7 +107,7 @@ impl Renderer {
         }
 
         let helper = TocTreeHelper {
-            toctree: Arc::clone(&toctree),
+            toctree: Arc::clone(toctree),
         };
 
         handlebars.register_helper("striptags", Box::new(StripTags));

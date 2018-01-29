@@ -14,7 +14,7 @@ extern crate scoped_threadpool;
 extern crate serde_derive;
 #[macro_use]
 extern crate serde_json;
-extern crate simple_logger;
+extern crate simple_logging;
 extern crate syntect;
 extern crate time;
 extern crate toml;
@@ -274,7 +274,7 @@ fn build_project(project: Project, evaluator: Evaluator) {
     let theme = theme::Theme::load(&project.theme).expect("Failed to load theme");
 
     let renderer = Arc::new(
-        theme::Renderer::new(theme, Arc::new(toctree)).expect("Failed to construct renderer"),
+        theme::Renderer::new(theme, &Arc::new(toctree)).expect("Failed to construct renderer"),
     );
 
     debug!("Linking with {} workers", num_cpus);
@@ -457,13 +457,13 @@ fn main() {
         }
     }
 
-    let loglevel = if verbose {
-        log::LogLevel::Debug
+    let logging_filter = if verbose {
+        log::LevelFilter::Debug
     } else {
-        log::LogLevel::Info
+        log::LevelFilter::Info
     };
 
-    simple_logger::init_with_level(loglevel).expect("Failed to initialize logger");
+    simple_logging::log_to_stderr(logging_filter);
 
     match mode {
         ArgMode::Root => help(1),
