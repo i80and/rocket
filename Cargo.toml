@@ -6,7 +6,7 @@ authors = ["Andrew Aldridge <i80and@foxquill.com>"]
 [dependencies]
 bytecount = "0.3"
 glob = "0.2"
-handlebars = "0.29"
+handlebars = "0.30"
 lazy_static = "1.0"
 lazycell = "0.6"
 log = "0.4"
@@ -24,7 +24,7 @@ typed-arena = "1.3"
 walkdir = "2.0"
 
 [dependencies.syntect]
-version = "1.8"
+version = "2.0"
 default-features = false
 features = ["parsing", "assets", "dump-load", "html"]
 
